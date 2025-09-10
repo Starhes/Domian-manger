@@ -32,13 +32,16 @@ COPY go.mod ./
 COPY go.su[m] ./
 
 # 下载依赖并生成go.sum
-RUN go mod download
+RUN go mod download && go mod tidy
 
 # 复制后端源码
 COPY . .
 
 # 从第一阶段复制前端构建产物
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+
+# 确保所有依赖都正确解析
+RUN go mod tidy
 
 # 构建后端应用
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
