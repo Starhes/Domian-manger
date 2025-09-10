@@ -1,0 +1,92 @@
+# API测试文件 - 使用 REST Client 扩展或类似工具
+
+### 健康检查
+GET http://localhost:8080/api/health
+
+### 用户注册
+POST http://localhost:8080/api/register
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+### 用户登录
+POST http://localhost:8080/api/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "admin123"
+}
+
+### 获取可用域名 (无需认证)
+GET http://localhost:8080/api/domains
+
+### 获取用户DNS记录 (需要认证)
+GET http://localhost:8080/api/dns-records
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### 创建DNS记录 (需要认证)
+POST http://localhost:8080/api/dns-records
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "domain_id": 1,
+  "subdomain": "test",
+  "type": "A",
+  "value": "192.168.1.1",
+  "ttl": 600
+}
+
+### 更新DNS记录 (需要认证)
+PUT http://localhost:8080/api/dns-records/1
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+{
+  "value": "192.168.1.2",
+  "ttl": 3600
+}
+
+### 删除DNS记录 (需要认证)
+DELETE http://localhost:8080/api/dns-records/1
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### 管理员 - 获取用户列表 (需要管理员权限)
+GET http://localhost:8080/api/admin/users?page=1&pageSize=10
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### 管理员 - 获取域名列表
+GET http://localhost:8080/api/admin/domains
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### 管理员 - 添加域名
+POST http://localhost:8080/api/admin/domains
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+{
+  "name": "example.org"
+}
+
+### 管理员 - 获取DNS服务商列表
+GET http://localhost:8080/api/admin/dns-providers
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+### 管理员 - 添加DNS服务商
+POST http://localhost:8080/api/admin/dns-providers
+Content-Type: application/json
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE
+
+{
+  "name": "DNSPod主服务商",
+  "type": "dnspod",
+  "config": "{\"token\": \"your_dnspod_token_here\"}"
+}
+
+### 管理员 - 获取系统统计
+GET http://localhost:8080/api/admin/stats
+Authorization: Bearer YOUR_ADMIN_JWT_TOKEN_HERE

@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  # 应用服务
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # 服务器配置
+      - PORT=8080
+      - ENVIRONMENT=production
+
+      # 数据库配置
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=your_secure_password_here
+      - DB_NAME=domain_manager
+      - DB_TYPE=postgres
+
+      # JWT密钥 (生产环境请使用更安全的密钥)
+      - JWT_SECRET=your_jwt_secret_key_change_this_in_production
+
+      # 邮件配置 (可选)
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=your_email@gmail.com
+      - SMTP_PASSWORD=your_app_password
+      - SMTP_FROM=noreply@yourdomain.com
+
+      # DNSPod配置 (可选，可在管理后台配置)
+      - DNSPOD_TOKEN=your_dnspod_token_here
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - domain-manager-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 数据库服务
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=domain_manager
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=your_secure_password_here
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432" # 仅开发时暴露，生产环境可以移除
+    restart: unless-stopped
+    networks:
+      - domain-manager-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d domain_manager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  domain-manager-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
