@@ -26,9 +26,12 @@ RUN apk add --no-cache git ca-certificates tzdata
 WORKDIR /app
 
 # 复制Go模块文件
-COPY go.mod go.sum ./
+COPY go.mod ./
 
-# 下载依赖
+# 如果go.sum存在则复制，否则跳过
+COPY go.su[m] ./
+
+# 下载依赖并生成go.sum
 RUN go mod download
 
 # 复制后端源码
