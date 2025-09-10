@@ -160,7 +160,7 @@ const DNSRecords = () => {
     {
       title: '操作',
       key: 'actions',
-      render: (_, record: DNSRecord) => (
+      render: (_: any, record: DNSRecord) => (
         <Space>
           <Button
             type="link"
