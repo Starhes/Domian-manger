@@ -18,7 +18,7 @@ COPY frontend/ ./
 RUN npm run build --verbose
 
 # 第二阶段：构建后端
-FROM golang:1.21-alpine AS backend-builder
+FROM golang:1.23-alpine AS backend-builder
 
 # 安装构建依赖
 RUN apk add --no-cache git ca-certificates tzdata
