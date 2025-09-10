@@ -155,7 +155,7 @@ const AdminUsers = () => {
     {
       title: '操作',
       key: 'actions',
-      render: (_, record: User) => (
+      render: (_: any, record: User) => (
         <Space>
           <Button
             type="link"

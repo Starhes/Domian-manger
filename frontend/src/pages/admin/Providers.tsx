@@ -168,7 +168,7 @@ const AdminProviders = () => {
     {
       title: '操作',
       key: 'actions',
-      render: (_, record: DNSProvider) => (
+      render: (_: any, record: DNSProvider) => (
         <Space>
           <Button
             type="link"
