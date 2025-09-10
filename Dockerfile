@@ -14,8 +14,8 @@ RUN npm install
 # 复制前端源码
 COPY frontend/ ./
 
-# 构建前端
-RUN npm run build
+# 构建前端（显示详细输出）
+RUN npm run build --verbose
 
 # 第二阶段：构建后端
 FROM golang:1.21-alpine AS backend-builder
