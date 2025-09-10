@@ -124,7 +124,7 @@ const AdminDomains = () => {
     {
       title: '操作',
       key: 'actions',
-      render: (_, record: Domain) => (
+      render: (_: any, record: Domain) => (
         <Space>
           <Button
             type="link"
