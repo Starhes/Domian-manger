@@ -10,7 +10,7 @@ env:
   REGISTRY: ghcr.io
   # 统一转小写，避免仓库名含大写或数字开头导致 registry 报错
   IMAGE_NAME: ${{ github.repository }}
-  CACHE_IMAGE: ghcr.io/${{ github.repository_owner }}/$(echo ${{ github.event.repository.name }} | tr '[:upper:]' '[:lower:]'):build-cache
+  CACHE_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name && github.event.repository.name.toLowerCase() }}:build-cache
   RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
 
 jobs:
