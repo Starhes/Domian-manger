@@ -203,7 +203,6 @@ docker-compose up -d
 
 - **🚀 [部署指南](./DEPLOYMENT.md)** - 完整部署和运维方案
 - **📖 [操作手册](./OPERATIONS.md)** - 详细功能使用说明
-- **🔒 [安全升级指南](./SECURITY-UPGRADES.md)** - 安全特性和升级说明
 
 ### 社区支持
 
@@ -257,4 +256,3 @@ MIT License - Copyright (c) 2025 Domain-MAX
 
 [![立即部署](https://img.shields.io/badge/立即部署-Docker%20一键启动-brightgreen?style=for-the-badge)](./DEPLOYMENT.md#-快速开始)
 [![使用指南](https://img.shields.io/badge/使用指南-功能操作说明-blue?style=for-the-badge)](./OPERATIONS.md)
-[![安全升级](https://img.shields.io/badge/安全升级-银行级防护-red?style=for-the-badge)](./SECURITY-UPGRADES.md)
