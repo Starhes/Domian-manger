@@ -273,30 +273,25 @@ func (p *DNSPodV3Provider) GetRecords(domain string) ([]DNSRecord, error) {
 	return records, nil
 }
 
-// getDomainId 获取域名ID
-func (p *DNSPodV3Provider) getDomainId(domain string) (uint64, error) {
-	// 参数验证
-	if err := ValidateDomainName(domain); err != nil {
-		return 0, fmt.Errorf("域名验证失败: %v", err)
-	}
+// GetDomains 获取账号下所有域名
+func (p *DNSPodV3Provider) GetDomains() ([]Domain, error) {
+	params := BuildDescribeDomainListParams("") // 传入空字符串以获取所有域名
 
-	// 构建类型安全的请求参数
-	params := BuildDescribeDomainListParams(domain)
-
-	// 发送查询请求
 	var resp DescribeDomainsResponse
 	if err := p.makeRequest("DescribeDomainList", params, &resp); err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	// 查找匹配的域名
-	for _, domainInfo := range resp.Response.DomainList {
-		if domainInfo.Name == domain {
-			return domainInfo.DomainId, nil
-		}
+	var domains []Domain
+	for _, d := range resp.Response.DomainList {
+		domains = append(domains, Domain{
+			ID:     strconv.FormatUint(d.DomainId, 10),
+			Name:   d.Name,
+			Status: d.Status,
+		})
 	}
 
-	return 0, fmt.Errorf("域名 %s 未在腾讯云DNSPod中找到", domain)
+	return domains, nil
 }
 
 // makeRequest 发送腾讯云API请求
@@ -612,4 +607,172 @@ func (p *DNSPodV3Provider) logAPICall(action string, success bool, requestId str
 		fmt.Printf("[DNSPod API] %s %s - RequestId: %s, Duration: %v\n", 
 			action, status, requestId, duration)
 	}
+}
+
+// GetRecordByID 根据记录ID获取单个DNS记录
+func (p *DNSPodV3Provider) GetRecordByID(domain, recordID string) (*DNSRecord, error) {
+	// 参数验证
+	if err := ValidateDomainName(domain); err != nil {
+		return nil, fmt.Errorf("域名验证失败: %v", err)
+	}
+	
+	// 将recordID从string转换为uint64
+	recordId, err := SafeStringToUint64(recordID)
+	if err != nil {
+		return nil, fmt.Errorf("无效的记录ID: %v", err)
+	}
+
+	// 构建请求参数
+	params := map[string]interface{}{
+		"Domain":   domain,
+		"RecordId": recordId,
+	}
+
+	// 发送查询请求
+	var resp struct {
+		Response struct {
+			Error *struct {
+				Code    string `json:"Code"`
+				Message string `json:"Message"`
+			} `json:"Error,omitempty"`
+			RequestId string `json:"RequestId"`
+			
+			RecordInfo struct {
+				RecordId uint64 `json:"RecordId"`
+				Name     string `json:"Name"`
+				Type     string `json:"Type"`
+				Value    string `json:"Value"`
+				TTL      uint64 `json:"TTL"`
+				Status   string `json:"Status"`
+				Line     string `json:"Line"`
+			} `json:"RecordInfo,omitempty"`
+		} `json:"Response"`
+	}
+	
+	if err := p.makeRequest("DescribeRecord", params, &resp); err != nil {
+		return nil, err
+	}
+
+	// 转换记录格式
+	record := ConvertRecordInfo(RecordInfo{
+		RecordId: resp.Response.RecordInfo.RecordId,
+		Name:     resp.Response.RecordInfo.Name,
+		Type:     resp.Response.RecordInfo.Type,
+		Value:    resp.Response.RecordInfo.Value,
+		TTL:      resp.Response.RecordInfo.TTL,
+		Status:   resp.Response.RecordInfo.Status,
+		Line:     resp.Response.RecordInfo.Line,
+	}, domain)
+
+	return &record, nil
+}
+
+// SetRecordStatus 设置记录状态（启用/禁用）
+func (p *DNSPodV3Provider) SetRecordStatus(domain, recordID string, status string) error {
+	// 参数验证
+	if err := ValidateDomainName(domain); err != nil {
+		return fmt.Errorf("域名验证失败: %v", err)
+	}
+	
+	// 验证状态参数
+	if status != "ENABLE" && status != "DISABLE" {
+		return fmt.Errorf("无效的记录状态: %s，应为ENABLE或DISABLE", status)
+	}
+	
+	// 将recordID从string转换为uint64
+	recordId, err := SafeStringToUint64(recordID)
+	if err != nil {
+		return fmt.Errorf("无效的记录ID: %v", err)
+	}
+
+	// 构建请求参数
+	params := map[string]interface{}{
+		"Domain":   domain,
+		"RecordId": recordId,
+		"Status":   status,
+	}
+
+	// 发送设置状态请求
+	var resp TencentCloudResponse
+	return p.makeRequest("ModifyRecordStatus", params, &resp)
+}
+
+// GetDomainInfo 获取域名详细信息
+func (p *DNSPodV3Provider) GetDomainInfo(domain string) (map[string]interface{}, error) {
+	// 参数验证
+	if err := ValidateDomainName(domain); err != nil {
+		return nil, fmt.Errorf("域名验证失败: %v", err)
+	}
+
+	// 构建请求参数
+	params := map[string]interface{}{
+		"Domain": domain,
+	}
+
+	// 发送查询请求
+	var resp struct {
+		Response struct {
+			Error *struct {
+				Code    string `json:"Code"`
+				Message string `json:"Message"`
+			} `json:"Error,omitempty"`
+			RequestId string `json:"RequestId"`
+			
+			DomainInfo DomainInfo `json:"DomainInfo,omitempty"`
+		} `json:"Response"`
+	}
+	
+	if err := p.makeRequest("DescribeDomain", params, &resp); err != nil {
+		return nil, err
+	}
+
+	// 转换域名信息格式
+	return ConvertDomainInfo(resp.Response.DomainInfo), nil
+}
+
+// BatchCreateRecords 批量创建DNS记录
+func (p *DNSPodV3Provider) BatchCreateRecords(domain string, records []CreateRecordRequest) ([]string, error) {
+	// 参数验证
+	if err := ValidateDomainName(domain); err != nil {
+		return nil, fmt.Errorf("域名验证失败: %v", err)
+	}
+	
+	if len(records) == 0 {
+		return nil, fmt.Errorf("记录列表不能为空")
+	}
+	
+	if len(records) > 20 { // 限制批量操作的数量
+		return nil, fmt.Errorf("批量创建记录数量不能超过20条")
+	}
+
+	var recordIds []string
+	var errors []string
+
+	// 逐个创建记录（DNSPod API v3暂不支持真正的批量操作）
+	for i, record := range records {
+		// 验证每个记录的参数
+		if err := ValidateCreateRecordParams(domain, record.SubDomain, record.RecordType, record.Value, 
+			SafeUint64ToInt(*record.TTL)); err != nil {
+			errors = append(errors, fmt.Sprintf("记录%d: %v", i+1, err))
+			continue
+		}
+		
+		// 创建记录
+		recordId, err := p.CreateRecord(domain, record.SubDomain, record.RecordType, record.Value, 
+			SafeUint64ToInt(*record.TTL))
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("记录%d创建失败: %v", i+1, err))
+			continue
+		}
+		
+		recordIds = append(recordIds, recordId)
+	}
+
+	// 如果有错误，返回部分成功的结果和错误信息
+	if len(errors) > 0 {
+		return recordIds, fmt.Errorf("部分记录创建失败: %s", 
+			fmt.Sprintf("[%s]", fmt.Sprintf("%v", errors)))
+	}
+
+	return recordIds, nil
 }

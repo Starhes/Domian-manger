@@ -29,6 +29,16 @@ type DNSProvider interface {
 
 	// GetRecords 获取域名的所有记录
 	GetRecords(domain string) ([]DNSRecord, error)
+
+	// GetDomains 获取账号下的所有域名
+	GetDomains() ([]Domain, error)
+}
+
+// Domain 域名信息结构
+type Domain struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 // DNSRecord DNS记录结构

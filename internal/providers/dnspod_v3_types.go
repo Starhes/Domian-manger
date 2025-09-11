@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -385,14 +386,9 @@ func ValidateCreateRecordParams(domain, subdomain, recordType, value string, ttl
 		return err
 	}
 	
-	// 验证记录类型
-	if err := ValidateRecordType(recordType); err != nil {
+	// 验证记录类型和值的组合
+	if err := ValidateRecordTypeAndValue(recordType, value); err != nil {
 		return err
-	}
-	
-	// 验证记录值
-	if err := ValidateStringLength(value, 1, 500); err != nil {
-		return fmt.Errorf("记录值%v", err)
 	}
 	
 	// 验证TTL
@@ -400,6 +396,9 @@ func ValidateCreateRecordParams(domain, subdomain, recordType, value string, ttl
 		if err := ValidateTTL(uint64(ttl)); err != nil {
 			return err
 		}
+	} else {
+		// 如果TTL为0或负数，使用默认值
+		ttl = int(GetDefaultTTL(recordType))
 	}
 	
 	return nil
@@ -511,4 +510,223 @@ func ConvertDomainInfo(info DomainInfo) map[string]interface{} {
 	}
 	
 	return result
+}
+
+// 增强的记录类型验证
+func ValidateRecordTypeAndValue(recordType, value string) error {
+	if err := ValidateRecordType(recordType); err != nil {
+		return err
+	}
+	
+	// 根据记录类型验证记录值格式
+	switch recordType {
+	case "A":
+		// IPv4地址验证
+		if err := ValidateIPv4(value); err != nil {
+			return fmt.Errorf("A记录值格式错误: %v", err)
+		}
+	case "AAAA":
+		// IPv6地址验证
+		if err := ValidateIPv6(value); err != nil {
+			return fmt.Errorf("AAAA记录值格式错误: %v", err)
+		}
+	case "CNAME":
+		// 域名格式验证
+		if err := ValidateDomainName(value); err != nil {
+			return fmt.Errorf("CNAME记录值格式错误: %v", err)
+		}
+	case "MX":
+		// MX记录格式验证 (优先级 域名)
+		if err := ValidateMXRecord(value); err != nil {
+			return fmt.Errorf("MX记录值格式错误: %v", err)
+		}
+	case "TXT":
+		// TXT记录长度验证
+		if len(value) > 255 {
+			return fmt.Errorf("TXT记录值长度不能超过255字符")
+		}
+	case "NS":
+		// NS记录域名验证
+		if err := ValidateDomainName(value); err != nil {
+			return fmt.Errorf("NS记录值格式错误: %v", err)
+		}
+	case "SRV":
+		// SRV记录格式验证
+		if err := ValidateSRVRecord(value); err != nil {
+			return fmt.Errorf("SRV记录值格式错误: %v", err)
+		}
+	case "CAA":
+		// CAA记录格式验证
+		if err := ValidateCAARecord(value); err != nil {
+			return fmt.Errorf("CAA记录值格式错误: %v", err)
+		}
+	}
+	
+	return nil
+}
+
+// ValidateIPv4 验证IPv4地址格式
+func ValidateIPv4(ip string) error {
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return fmt.Errorf("IPv4地址格式错误")
+	}
+	
+	for _, part := range parts {
+		num, err := strconv.Atoi(part)
+		if err != nil || num < 0 || num > 255 {
+			return fmt.Errorf("IPv4地址格式错误")
+		}
+	}
+	
+	return nil
+}
+
+// ValidateIPv6 验证IPv6地址格式
+func ValidateIPv6(ip string) error {
+	// 简单的IPv6格式验证
+	if len(ip) < 2 || len(ip) > 39 {
+		return fmt.Errorf("IPv6地址格式错误")
+	}
+	
+	// 检查是否包含有效的IPv6字符
+	validChars := "0123456789abcdefABCDEF:"
+	for _, char := range ip {
+		if !strings.ContainsRune(validChars, char) {
+			return fmt.Errorf("IPv6地址包含无效字符")
+		}
+	}
+	
+	return nil
+}
+
+// ValidateMXRecord 验证MX记录格式
+func ValidateMXRecord(value string) error {
+	parts := strings.Fields(value)
+	if len(parts) != 2 {
+		return fmt.Errorf("MX记录格式应为: 优先级 邮件服务器域名")
+	}
+	
+	// 验证优先级
+	priority, err := strconv.Atoi(parts[0])
+	if err != nil || priority < 0 || priority > 65535 {
+		return fmt.Errorf("MX记录优先级必须是0-65535之间的数字")
+	}
+	
+	// 验证邮件服务器域名
+	return ValidateDomainName(parts[1])
+}
+
+// ValidateSRVRecord 验证SRV记录格式
+func ValidateSRVRecord(value string) error {
+	parts := strings.Fields(value)
+	if len(parts) != 4 {
+		return fmt.Errorf("SRV记录格式应为: 优先级 权重 端口 目标")
+	}
+	
+	// 验证优先级
+	priority, err := strconv.Atoi(parts[0])
+	if err != nil || priority < 0 || priority > 65535 {
+		return fmt.Errorf("SRV记录优先级必须是0-65535之间的数字")
+	}
+	
+	// 验证权重
+	weight, err := strconv.Atoi(parts[1])
+	if err != nil || weight < 0 || weight > 65535 {
+		return fmt.Errorf("SRV记录权重必须是0-65535之间的数字")
+	}
+	
+	// 验证端口
+	port, err := strconv.Atoi(parts[2])
+	if err != nil || port < 0 || port > 65535 {
+		return fmt.Errorf("SRV记录端口必须是0-65535之间的数字")
+	}
+	
+	// 验证目标域名
+	return ValidateDomainName(parts[3])
+}
+
+// ValidateCAARecord 验证CAA记录格式
+func ValidateCAARecord(value string) error {
+	parts := strings.Fields(value)
+	if len(parts) < 3 {
+		return fmt.Errorf("CAA记录格式应为: 标志 标签 值")
+	}
+	
+	// 验证标志
+	flag, err := strconv.Atoi(parts[0])
+	if err != nil || flag < 0 || flag > 255 {
+		return fmt.Errorf("CAA记录标志必须是0-255之间的数字")
+	}
+	
+	// 验证标签
+	tag := parts[1]
+	validTags := []string{"issue", "issuewild", "iodef"}
+	isValidTag := false
+	for _, validTag := range validTags {
+		if tag == validTag {
+			isValidTag = true
+			break
+		}
+	}
+	if !isValidTag {
+		return fmt.Errorf("CAA记录标签必须是issue、issuewild或iodef之一")
+	}
+	
+	return nil
+}
+
+// 扩展的线路类型定义
+var ValidRecordLines = map[string]string{
+	"默认":     "默认",
+	"国内":     "国内",
+	"国外":     "国外",
+	"电信":     "电信",
+	"联通":     "联通",
+	"移动":     "移动",
+	"铁通":     "铁通",
+	"教育网":    "教育网",
+	"搜索引擎":   "搜索引擎",
+	"百度":     "百度",
+	"谷歌":     "谷歌",
+	"必应":     "必应",
+	"搜狗":     "搜狗",
+	"奇虎":     "奇虎",
+	"有道":     "有道",
+	"搜搜":     "搜搜",
+}
+
+// ValidateRecordLine 验证解析线路
+func ValidateRecordLine(line string) error {
+	if line == "" {
+		return nil // 空值使用默认线路
+	}
+	
+	if _, exists := ValidRecordLines[line]; !exists {
+		return fmt.Errorf("不支持的解析线路: %s", line)
+	}
+	
+	return nil
+}
+
+// GetDefaultTTL 根据记录类型获取默认TTL值
+func GetDefaultTTL(recordType string) uint64 {
+	switch recordType {
+	case "A", "AAAA":
+		return 600  // 10分钟
+	case "CNAME":
+		return 600  // 10分钟
+	case "MX":
+		return 3600 // 1小时
+	case "TXT":
+		return 600  // 10分钟
+	case "NS":
+		return 3600 // 1小时
+	case "SRV":
+		return 600  // 10分钟
+	case "CAA":
+		return 3600 // 1小时
+	default:
+		return 600  // 默认10分钟
+	}
 }
