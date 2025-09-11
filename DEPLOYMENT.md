@@ -120,6 +120,116 @@ go build -o domain-max-server main.go
     ./domain-max-server
     ```
 
+## 🏗️ 本地开发环境部署
+
+如果您希望在本地进行开发、调试或贡献代码，请遵循以下步骤。此方法不使用 Docker，您需要在本地手动安装所需环境。
+
+### 1. 环境要求
+
+- **Go**: v1.21 或更高版本
+- **Node.js**: v18.x (LTS) 或更高版本
+- **Database**:
+  - PostgreSQL v15+ 或
+  - MySQL v8.0+
+- **Git**
+
+### 2. 数据库配置
+
+1.  **创建数据库**:
+    请根据您选择的数据库类型，创建一个名为 `domain_manager` 的数据库。
+
+    - **PostgreSQL 示例**:
+      ```sql
+      CREATE DATABASE domain_manager;
+      ```
+    - **MySQL 示例**:
+      ```sql
+      CREATE DATABASE domain_manager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      ```
+
+2.  **初始化管理员账户**:
+    项目启动时，GORM 会自动迁移数据库表结构。但为了创建默认的管理员账户，您需要手动执行 `init.sql` 文件中的 SQL 语句。
+
+    将 `init.sql` 文件中的 `INSERT` 语句复制到您的数据库客户端（如 psql, DataGrip, Navicat）中执行。
+
+### 3. 应用配置
+
+1.  **克隆项目** (如果尚未操作):
+
+    ```bash
+    git clone https://github.com/Domain-MAX/Domain-MAX.git
+    cd Domain-MAX
+    ```
+
+2.  **配置环境变量**:
+    复制 `.env` 文件，并根据您的本地环境进行修改。
+
+    ```bash
+    cp env.example .env
+    nano .env
+    ```
+
+    **关键修改项**:
+
+    ```dotenv
+    # 根据您选择的数据库类型填写 (postgres 或 mysql)
+    DB_TYPE=postgres
+
+    # 将 DB_HOST 修改为本地地址
+    DB_HOST=localhost
+
+    # 您的数据库端口
+    DB_PORT=5432
+
+    # 您的数据库用户名
+    DB_USER=your_db_user
+
+    # 您的数据库密码
+    DB_PASSWORD=your_db_password
+
+    # 数据库名
+    DB_NAME=domain_manager
+
+    # JWT 密钥，用于开发，可保持默认或自定义
+    JWT_SECRET=your_jwt_secret_key_change_this_in_production
+    ```
+
+### 4. 启动应用
+
+您需要打开两个终端窗口，一个用于启动后端，另一个用于启动前端。
+
+1.  **启动后端服务** (终端 1):
+
+    ```bash
+    # 安装 Go 依赖
+    go mod tidy
+
+    # 启动后端 (默认监听在 8080 端口)
+    go run main.go
+    ```
+
+    看到类似 `[GIN-debug] Listening and serving HTTP on :8080` 的输出表示后端启动成功。
+
+2.  **启动前端服务** (终端 2):
+
+    ```bash
+    cd frontend
+
+    # 安装 Node.js 依赖
+    npm install
+
+    # 启动前端开发服务器 (默认监听在 5173 端口)
+    npm run dev
+    ```
+
+    前端开发服务器启动后，会自动将 API 请求代理到 `localhost:8080` 的后端服务。
+
+### 5. 访问系统
+
+- 在浏览器中打开前端开发服务器的地址 (通常是 `http://localhost:5173`) 即可访问。
+
+---
+
 ## 🛡️ 生产环境最佳实践
 
 ### 1. 使用 Nginx 进行反向代理
