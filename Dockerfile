@@ -63,8 +63,9 @@ RUN adduser -D -g '' appuser
 
 WORKDIR /app
 
-# 从构建阶段复制二进制文件
+# 从构建阶段复制二进制文件和前端文件
 COPY --from=backend-builder /app/main .
+COPY --from=backend-builder /app/frontend/dist ./frontend/dist
 
 # 设置文件权限
 RUN chown -R appuser:appuser /app

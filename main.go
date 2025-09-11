@@ -59,8 +59,12 @@ func setupFrontendRoutes(router *gin.Engine) {
 		log.Fatal("无法加载前端文件:", err)
 	}
 
-	// 静态文件服务
-	router.StaticFS("/static", http.FS(frontendFS))
+	// 静态文件服务 - 处理构建后的静态资源
+	staticFS, err := fs.Sub(frontendFS, "static")
+	if err != nil {
+		log.Fatal("无法加载静态文件:", err)
+	}
+	router.StaticFS("/static", http.FS(staticFS))
 
 	// 处理所有其他路由，返回index.html (用于React Router)
 	router.NoRoute(func(c *gin.Context) {
