@@ -106,6 +106,12 @@ const AdminProviders = () => {
         return JSON.stringify({
           token: "your_dnspod_token_here"
         }, null, 2)
+      case 'dnspod_v3':
+        return JSON.stringify({
+          secret_id: "AKID********************************",
+          secret_key: "********************************",
+          region: "ap-guangzhou"
+        }, null, 2)
       case 'cloudflare':
         return JSON.stringify({
           api_token: "your_cloudflare_api_token_here",
@@ -143,9 +149,10 @@ const AdminProviders = () => {
       render: (type: string) => (
         <Tag color={
           type === 'dnspod' ? 'blue' :
+          type === 'dnspod_v3' ? 'green' :
           type === 'cloudflare' ? 'orange' : 'default'
         }>
-          {type.toUpperCase()}
+          {type === 'dnspod_v3' ? '腾讯云DNSPod' : type.toUpperCase()}
         </Tag>
       ),
     },
@@ -262,7 +269,8 @@ const AdminProviders = () => {
               placeholder="选择服务商类型"
               onChange={handleTypeChange}
             >
-              <Option value="dnspod">DNSPod</Option>
+              <Option value="dnspod">DNSPod (旧版API)</Option>
+              <Option value="dnspod_v3">腾讯云DNSPod (推荐)</Option>
               <Option value="cloudflare">Cloudflare (暂未支持)</Option>
             </Select>
           </Form.Item>
@@ -306,9 +314,12 @@ const AdminProviders = () => {
           }}>
             <h4 style={{ margin: '0 0 8px 0', fontSize: '14px' }}>配置说明:</h4>
             <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: '#666' }}>
-              <li>DNSPod: 需要提供token字段</li>
+              <li>DNSPod (旧版): 需要提供token字段，格式: ID,Token</li>
+              <li>腾讯云DNSPod: 需要提供secret_id (36位，AKID开头)、secret_key (32位) 和region字段</li>
+              <li>支持地域: ap-guangzhou, ap-shanghai, ap-beijing 等</li>
               <li>Cloudflare: 需要提供api_token和zone_id字段</li>
-              <li>请确保API凭证的有效性和权限设置</li>
+              <li>推荐使用腾讯云DNSPod，采用TC3-HMAC-SHA256签名，安全性更高</li>
+              <li>请确保API凭证的有效性和DNS解析权限</li>
             </ul>
           </div>
         </Form>

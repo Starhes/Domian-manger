@@ -1,5 +1,7 @@
 package providers
 
+import "fmt"
+
 // DNSProvider DNS服务商接口
 type DNSProvider interface {
 	// CreateRecord 创建DNS记录
@@ -38,4 +40,18 @@ type DNSRecord struct {
 	Value     string `json:"value"`
 	TTL       int    `json:"ttl"`
 	Status    string `json:"status"`
+}
+
+// NewDNSProvider 创建DNS服务商实例
+func NewDNSProvider(providerType, configJSON string) (DNSProvider, error) {
+	switch providerType {
+	case "dnspod":
+		// 旧版DNSPod API (dnsapi.cn)
+		return NewDNSPodProvider(configJSON)
+	case "dnspod_v3":
+		// 腾讯云DNSPod API v3 (tencentcloudapi.com)
+		return NewDNSPodV3Provider(configJSON)
+	default:
+		return nil, fmt.Errorf("不支持的DNS服务商类型: %s", providerType)
+	}
 }

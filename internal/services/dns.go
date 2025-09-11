@@ -167,10 +167,6 @@ func (s *DNSService) getDNSProvider() (providers.DNSProvider, error) {
 		return nil, errors.New("没有可用的DNS服务商")
 	}
 
-	switch dnsProvider.Type {
-	case "dnspod":
-		return providers.NewDNSPodProvider(dnsProvider.Config)
-	default:
-		return nil, fmt.Errorf("不支持的DNS服务商类型: %s", dnsProvider.Type)
-	}
+	// 使用新的provider工厂
+	return providers.NewDNSProvider(dnsProvider.Type, dnsProvider.Config)
 }
