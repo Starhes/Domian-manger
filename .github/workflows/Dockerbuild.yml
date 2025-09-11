@@ -1,14 +1,15 @@
 name: Docker Build & Push with Cache
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:  # 支持手动触发 [3][9]
+  workflow_dispatch:  # 支持手动触发
 
 env:
   REGISTRY: ghcr.io
-  RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}  # Hook地址隐藏保护
+  RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
 
 jobs:
   build-and-push:
@@ -18,7 +19,7 @@ jobs:
       packages: write
     
     steps:
-      # 步骤1: 安全生成小写镜像名称
+      # 步骤1: 生成安全镜像名称（全部小写）
       - name: Generate safe image names
         run: |
           OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
@@ -29,7 +30,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 步骤2: Docker环境配置
+      # 步骤2: Docker 环境配置
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Buildx
@@ -41,17 +42,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 步骤3: 动态生成镜像标签（含latest和唯一SHA标签）
+      # 步骤3: 生成镜像标签（latest + sha）
       - name: Generate Docker tags
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}  # 仅main分支生成latest [7][9]
-            type=sha,prefix=sha-,format=lower  # 永久唯一标签
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-
 
-      # 步骤4: 构建并推送镜像（启用缓存加速）
+      # 步骤4: 构建并推送镜像（启用缓存）
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -61,13 +62,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}
-          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }},mode=max  # 缓存复用加速 [3][5]
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }},mode=max
 
-      # 步骤5: 安全触发Render部署（隐藏hook地址）
+      # 步骤5: 触发 Render 部署
       - name: Trigger Render Deploy
         if: env.RENDER_DEPLOY_HOOK != ''
         env:
-          SECURE_HOOK: ${{ env.RENDER_DEPLOY_HOOK }}  # 通过环境变量二次保护
+          SECURE_HOOK: ${{ env.RENDER_DEPLOY_HOOK }}
         run: |
-          echo "触发安全部署流程..." 
-          curl -sfSX POST "$SECURE_HOOK"
+          echo "触发 Render 部署..."
+          curl -sfSLX POST "$SECURE_HOOK"
