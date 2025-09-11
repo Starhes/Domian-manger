@@ -38,8 +38,17 @@ func main() {
 
 	router := gin.Default()
 
-	// 添加CORS中间件
-	router.Use(middleware.CORS())
+	// 添加环境感知的CORS中间件
+	corsConfig := middleware.CORSConfig{
+		AllowedOrigins: []string{
+			"http://localhost:3000",   // React开发服务器
+			"http://localhost:5173",   // Vite开发服务器
+			"http://localhost:8080",   // 本地生产环境
+			"https://your-domain.com", // 生产域名，需要替换为实际域名
+		},
+		IsDevelopment: cfg.Environment == "development",
+	}
+	router.Use(middleware.CORSWithConfig(corsConfig))
 
 	// API路由
 	apiGroup := router.Group("/api")

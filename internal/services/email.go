@@ -3,79 +3,221 @@ package services
 import (
 	"crypto/tls"
 	"domain-manager/internal/config"
+	"domain-manager/internal/models"
+	"domain-manager/internal/utils"
 	"fmt"
 	"net/smtp"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type EmailService struct {
-	cfg *config.Config
+	cfg    *config.Config
+	db     *gorm.DB
+	crypto *utils.CryptoService
 }
 
 func NewEmailService(cfg *config.Config) *EmailService {
-	return &EmailService{cfg: cfg}
+	// 初始化加密服务
+	crypto, err := utils.NewCryptoService(cfg.EncryptionKey[:32])
+	if err != nil {
+		crypto = nil // 如果初始化失败，设为nil，后续会检查
+	}
+	
+	return &EmailService{
+		cfg:    cfg,
+		crypto: crypto,
+	}
+}
+
+func NewEmailServiceWithDB(cfg *config.Config, db *gorm.DB) *EmailService {
+	// 初始化加密服务
+	crypto, err := utils.NewCryptoService(cfg.EncryptionKey[:32])
+	if err != nil {
+		crypto = nil // 如果初始化失败，设为nil，后续会检查
+	}
+	
+	return &EmailService{
+		cfg:    cfg,
+		db:     db,
+		crypto: crypto,
+	}
 }
 
 // SendVerificationEmail 发送邮箱验证邮件
 func (s *EmailService) SendVerificationEmail(email, token string) error {
+	return s.SendVerificationEmailWithContext(nil, email, token)
+}
+
+// SendVerificationEmailWithContext 发送邮箱验证邮件（支持HTTP上下文）
+func (s *EmailService) SendVerificationEmailWithContext(c *gin.Context, email, token string) error {
+	baseURL := s.getBaseURL(c)
+	
 	if !s.isConfigured() {
 		// 开发环境下，如果没有配置邮件服务，打印到控制台
-		fmt.Printf("📧 邮箱验证链接（开发模式）: http://localhost:8080/api/verify-email/%s\n", token)
+		fmt.Printf("📧 邮箱验证链接（开发模式）: %s/api/verify-email/%s\n", baseURL, token)
 		fmt.Printf("📧 用户邮箱: %s\n", email)
 		return nil
 	}
 
 	subject := "激活您的账户 - 域名管理系统"
-	body := s.buildVerificationEmailBody(email, token)
+	body := s.buildVerificationEmailBodyWithURL(email, token, baseURL)
 
 	return s.sendEmail(email, subject, body)
 }
 
 // SendPasswordResetEmail 发送密码重置邮件
 func (s *EmailService) SendPasswordResetEmail(email, token string) error {
+	return s.SendPasswordResetEmailWithContext(nil, email, token)
+}
+
+// SendPasswordResetEmailWithContext 发送密码重置邮件（支持HTTP上下文）
+func (s *EmailService) SendPasswordResetEmailWithContext(c *gin.Context, email, token string) error {
+	baseURL := s.getBaseURL(c)
+	
 	if !s.isConfigured() {
 		// 开发环境下，如果没有配置邮件服务，打印到控制台
-		fmt.Printf("🔐 密码重置链接（开发模式）: http://localhost:8080/reset-password?token=%s\n", token)
+		fmt.Printf("🔐 密码重置链接（开发模式）: %s/reset-password?token=%s\n", baseURL, token)
 		fmt.Printf("📧 用户邮箱: %s\n", email)
 		return nil
 	}
 
 	subject := "重置您的密码 - 域名管理系统"
-	body := s.buildPasswordResetEmailBody(email, token)
+	body := s.buildPasswordResetEmailBodyWithURL(email, token, baseURL)
 
 	return s.sendEmail(email, subject, body)
 }
 
 // isConfigured 检查邮件服务是否配置完成
 func (s *EmailService) isConfigured() bool {
+	// 优先检查数据库配置
+	if s.db != nil {
+		if config := s.getActiveSMTPConfig(); config != nil {
+			return true
+		}
+	}
+	
+	// 回退到环境变量配置
 	return s.cfg.SMTPHost != "" &&
 		s.cfg.SMTPUser != "" &&
 		s.cfg.SMTPPassword != "" &&
 		s.cfg.SMTPFrom != ""
 }
 
+// getActiveSMTPConfig 获取激活的SMTP配置
+func (s *EmailService) getActiveSMTPConfig() *models.SMTPConfig {
+	if s.db == nil {
+		return nil
+	}
+	
+	var config models.SMTPConfig
+	if err := s.db.Where("is_active = ?", true).First(&config).Error; err != nil {
+		return nil
+	}
+	
+	return &config
+}
+
+// decryptPassword 解密SMTP密码
+func (s *EmailService) decryptPassword(encryptedPassword string) (string, error) {
+	if s.crypto == nil {
+		return "", fmt.Errorf("加密服务未初始化")
+	}
+	
+	decryptedPassword, err := s.crypto.Decrypt(encryptedPassword)
+	if err != nil {
+		return "", fmt.Errorf("密码解密失败: %v", err)
+	}
+	
+	return decryptedPassword, nil
+}
+
+// getBaseURL 获取基础URL，优先级：配置文件 > HTTP请求头 > 默认值
+func (s *EmailService) getBaseURL(c *gin.Context) string {
+	// 如果配置中已设置BASE_URL，直接使用
+	if s.cfg.BaseURL != "" && !strings.Contains(s.cfg.BaseURL, "localhost") {
+		return s.cfg.BaseURL
+	}
+	
+	// 尝试从HTTP请求头获取域名信息
+	if c != nil {
+		// 检查X-Forwarded-Proto和X-Forwarded-Host（反向代理）
+		proto := c.GetHeader("X-Forwarded-Proto")
+		host := c.GetHeader("X-Forwarded-Host")
+		
+		if proto == "" {
+			proto = "http"
+			if c.Request.TLS != nil {
+				proto = "https"
+			}
+		}
+		
+		if host == "" {
+			host = c.GetHeader("Host")
+		}
+		
+		if host != "" {
+			return fmt.Sprintf("%s://%s", proto, host)
+		}
+	}
+	
+	// 回退到配置中的BaseURL
+	return s.cfg.BaseURL
+}
+
 // sendEmail 发送邮件的核心功能
 func (s *EmailService) sendEmail(to, subject, body string) error {
+	// 获取SMTP配置（数据库优先，环境变量次之）
+	var host, user, password, from string
+	var port int
+	var useTLS bool
+	
+	if dbConfig := s.getActiveSMTPConfig(); dbConfig != nil {
+		// 使用数据库配置
+		host = dbConfig.Host
+		port = dbConfig.Port
+		user = dbConfig.Username
+		from = dbConfig.FromEmail
+		useTLS = dbConfig.UseTLS
+		
+		// 解密密码（注意：实际应用中需要实现真正的解密）
+		decryptedPassword, err := s.decryptPassword(dbConfig.Password)
+		if err != nil {
+			return fmt.Errorf("密码解密失败: %v", err)
+		}
+		password = decryptedPassword
+	} else {
+		// 回退到环境变量配置
+		host = s.cfg.SMTPHost
+		port = s.cfg.SMTPPort
+		user = s.cfg.SMTPUser
+		password = s.cfg.SMTPPassword
+		from = s.cfg.SMTPFrom
+		useTLS = (port == 587) // 默认587端口使用TLS
+	}
+
 	// 构建邮件内容
 	message := s.buildEmailMessage(to, subject, body)
 
 	// 设置认证
-	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPassword, s.cfg.SMTPHost)
+	auth := smtp.PlainAuth("", user, password, host)
 
 	// SMTP服务器地址
-	addr := fmt.Sprintf("%s:%d", s.cfg.SMTPHost, s.cfg.SMTPPort)
+	addr := fmt.Sprintf("%s:%d", host, port)
 
-	// 如果是Gmail或其他需要TLS的服务
-	if s.cfg.SMTPPort == 587 {
-		return s.sendEmailWithTLS(addr, auth, s.cfg.SMTPFrom, []string{to}, []byte(message))
+	// 如果需要TLS
+	if useTLS || port == 587 {
+		return s.sendEmailWithTLS(addr, auth, from, []string{to}, []byte(message), host)
 	}
 
 	// 标准SMTP发送
-	return smtp.SendMail(addr, auth, s.cfg.SMTPFrom, []string{to}, []byte(message))
+	return smtp.SendMail(addr, auth, from, []string{to}, []byte(message))
 }
 
 // sendEmailWithTLS 使用TLS发送邮件（适用于Gmail等）
-func (s *EmailService) sendEmailWithTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
+func (s *EmailService) sendEmailWithTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte, host string) error {
 	// 创建客户端
 	client, err := smtp.Dial(addr)
 	if err != nil {
@@ -84,7 +226,7 @@ func (s *EmailService) sendEmailWithTLS(addr string, auth smtp.Auth, from string
 	defer client.Close()
 
 	// 启动TLS
-	if err = client.StartTLS(&tls.Config{ServerName: s.cfg.SMTPHost}); err != nil {
+	if err = client.StartTLS(&tls.Config{ServerName: host}); err != nil {
 		return fmt.Errorf("启动TLS失败: %v", err)
 	}
 
@@ -145,7 +287,12 @@ func (s *EmailService) buildEmailMessage(to, subject, body string) string {
 
 // buildVerificationEmailBody 构建邮箱验证邮件内容
 func (s *EmailService) buildVerificationEmailBody(email, token string) string {
-	verifyURL := fmt.Sprintf("http://localhost:8080/api/verify-email/%s", token)
+	return s.buildVerificationEmailBodyWithURL(email, token, s.cfg.BaseURL)
+}
+
+// buildVerificationEmailBodyWithURL 使用指定URL构建邮箱验证邮件内容
+func (s *EmailService) buildVerificationEmailBodyWithURL(email, token, baseURL string) string {
+	verifyURL := fmt.Sprintf("%s/api/verify-email/%s", baseURL, token)
 
 	return fmt.Sprintf(`
 <!DOCTYPE html>
@@ -199,7 +346,12 @@ func (s *EmailService) buildVerificationEmailBody(email, token string) string {
 
 // buildPasswordResetEmailBody 构建密码重置邮件内容
 func (s *EmailService) buildPasswordResetEmailBody(email, token string) string {
-	resetURL := fmt.Sprintf("http://localhost:8080/reset-password?token=%s", token)
+	return s.buildPasswordResetEmailBodyWithURL(email, token, s.cfg.BaseURL)
+}
+
+// buildPasswordResetEmailBodyWithURL 使用指定URL构建密码重置邮件内容
+func (s *EmailService) buildPasswordResetEmailBodyWithURL(email, token, baseURL string) string {
+	resetURL := fmt.Sprintf("%s/reset-password?token=%s", baseURL, token)
 
 	return fmt.Sprintf(`
 <!DOCTYPE html>

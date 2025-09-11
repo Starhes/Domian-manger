@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 
@@ -11,10 +11,16 @@ const ProtectedRoute = ({ children, adminOnly = false }: ProtectedRouteProps) =>
   const { user, setRedirectPath } = useAuthStore()
   const location = useLocation()
 
+  // 使用 useEffect 来避免在渲染过程中直接调用状态更新
+  useEffect(() => {
+    if (!user) {
+      // 保存当前路径，登录后重定向回来
+      setRedirectPath(location.pathname + location.search)
+    }
+  }, [user, location.pathname, location.search, setRedirectPath])
+
   // 如果用户未登录
   if (!user) {
-    // 保存当前路径，登录后重定向回来
-    setRedirectPath(location.pathname + location.search)
     return <Navigate to="/login" replace />
   }
 

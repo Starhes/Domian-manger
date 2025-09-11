@@ -14,6 +14,7 @@ import AdminDashboard from './pages/admin/Dashboard'
 import AdminUsers from './pages/admin/Users'
 import AdminDomains from './pages/admin/Domains'
 import AdminProviders from './pages/admin/Providers'
+import AdminSMTPConfigs from './pages/admin/SMTPConfigs'
 import { useEffect } from 'react'
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
         <Route path="users" element={<AdminUsers />} />
         <Route path="domains" element={<AdminDomains />} />
         <Route path="providers" element={<AdminProviders />} />
+        <Route path="smtp-configs" element={<AdminSMTPConfigs />} />
       </Route>
 
       {/* 404 */}

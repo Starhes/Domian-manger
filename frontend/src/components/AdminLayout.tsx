@@ -7,7 +7,8 @@ import {
 	SettingOutlined,
 	LogoutOutlined,
 	HomeOutlined,
-	MenuOutlined
+	MenuOutlined,
+	MailOutlined
 } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
 import { useState } from 'react'
@@ -41,6 +42,11 @@ const AdminLayout = () => {
 			key: '/admin/providers',
 			icon: <SettingOutlined />,
 			label: 'DNS服务商',
+		},
+		{
+			key: '/admin/smtp-configs',
+			icon: <MailOutlined />,
+			label: 'SMTP配置',
 		},
 	]
 

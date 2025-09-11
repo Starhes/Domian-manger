@@ -31,15 +31,15 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 			})
 		})
 
-		// 认证相关
-		public.POST("/register", authHandler.Register)
-		public.POST("/login", authHandler.Login)
-		public.GET("/verify-email/:token", authHandler.VerifyEmail)
-		public.POST("/forgot-password", authHandler.ForgotPassword)
-		public.POST("/reset-password", authHandler.ResetPassword)
+	// 认证相关（添加速率限制）
+	public.POST("/register", middleware.RegisterRateLimit(), authHandler.Register)
+	public.POST("/login", middleware.LoginRateLimit(), authHandler.Login)
+	public.GET("/verify-email/:token", authHandler.VerifyEmail)
+	public.POST("/forgot-password", authHandler.ForgotPassword)
+	public.POST("/reset-password", authHandler.ResetPassword)
 
-		// 获取可用域名（无需认证）
-		public.GET("/domains", dnsHandler.GetAvailableDomains)
+	// 获取可用域名（无需认证）
+	public.GET("/domains", dnsHandler.GetAvailableDomains)
 	}
 
 	// 需要认证的路由
@@ -50,16 +50,25 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 		protected.GET("/profile", authHandler.GetProfile)
 		protected.PUT("/profile", authHandler.UpdateProfile)
 
-		// DNS记录管理
-		protected.GET("/dns-records", dnsHandler.GetUserDNSRecords)
-		protected.POST("/dns-records", dnsHandler.CreateDNSRecord)
-		protected.PUT("/dns-records/:id", dnsHandler.UpdateDNSRecord)
-		protected.DELETE("/dns-records/:id", dnsHandler.DeleteDNSRecord)
+	// DNS记录管理（添加速率限制）
+	protected.GET("/dns-records", dnsHandler.GetUserDNSRecords)
+	protected.POST("/dns-records", middleware.DNSOperationRateLimit(), dnsHandler.CreateDNSRecord)
+	protected.PUT("/dns-records/:id", middleware.DNSOperationRateLimit(), dnsHandler.UpdateDNSRecord)
+	protected.DELETE("/dns-records/:id", middleware.DNSOperationRateLimit(), dnsHandler.DeleteDNSRecord)
 	}
 
-	// 管理员路由
+	// 需要认证且支持token撤销的路由
+	protectedWithRevocation := router.Group("/")
+	protectedWithRevocation.Use(middleware.AuthRequiredWithTokenManager(db, cfg, authService))
+	{
+		// 登出需要token撤销功能
+		protectedWithRevocation.POST("/logout", authHandler.Logout)
+	}
+
+	// 管理员路由（添加速率限制）
 	admin := router.Group("/admin")
 	admin.Use(middleware.AdminRequired(db, cfg))
+	admin.Use(middleware.AdminRateLimit())
 	{
 		// 用户管理
 		admin.GET("/users", adminHandler.GetUsers)
@@ -82,5 +91,15 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 
 		// 系统统计
 		admin.GET("/stats", adminHandler.GetStats)
+
+		// SMTP配置管理
+		admin.GET("/smtp-configs", adminHandler.GetSMTPConfigs)
+		admin.GET("/smtp-configs/:id", adminHandler.GetSMTPConfig)
+		admin.POST("/smtp-configs", adminHandler.CreateSMTPConfig)
+		admin.PUT("/smtp-configs/:id", adminHandler.UpdateSMTPConfig)
+		admin.DELETE("/smtp-configs/:id", adminHandler.DeleteSMTPConfig)
+		admin.POST("/smtp-configs/:id/activate", adminHandler.ActivateSMTPConfig)
+		admin.POST("/smtp-configs/:id/set-default", adminHandler.SetDefaultSMTPConfig)
+		admin.POST("/smtp-configs/:id/test", adminHandler.TestSMTPConfig)
 	}
 }
