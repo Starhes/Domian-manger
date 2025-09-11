@@ -129,7 +129,8 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	userObj := user.(models.User)
 
 	var req struct {
-		Email string `json:"email" binding:"omitempty,email"`
+		Email    string `json:"email" binding:"omitempty,email"`
+		Password string `json:"password" binding:"omitempty,min=6"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -137,9 +138,15 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	// 这里可以添加更新用户信息的逻辑
+	// 调用服务层更新用户资料
+	updatedUser, err := h.authService.UpdateProfile(userObj.ID, req.Email, req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "资料更新成功",
-		"user":    userObj,
+		"user":    updatedUser,
 	})
 }

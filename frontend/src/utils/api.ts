@@ -1,8 +1,28 @@
 import axios from 'axios'
 import { message } from 'antd'
 
+// 根据环境自动确定API基础URL
+const getBaseURL = (): string => {
+  // 如果是开发环境
+  if (import.meta.env.DEV) {
+    return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+  }
+  
+  // 生产环境：使用当前域名
+  const protocol = window.location.protocol
+  const host = window.location.host
+  
+  // 如果有自定义的API URL环境变量，使用它
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  
+  // 否则使用当前域名
+  return `${protocol}//${host}`
+}
+
 const api = axios.create({
-  baseURL: '',
+  baseURL: getBaseURL(),
   timeout: 10000,
 })
 

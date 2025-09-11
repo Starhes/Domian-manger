@@ -34,7 +34,7 @@ type DNSPodResponse struct {
 		Name string `json:"name"`
 	} `json:"domain"`
 	Domains []DNSPodDomainInfo `json:"domains"`
-	Record struct {
+	Record  struct {
 		ID     string `json:"id"`
 		Name   string `json:"name"`
 		Type   string `json:"type"`
@@ -69,10 +69,17 @@ func NewDNSPodProvider(configJSON string) (DNSProvider, error) {
 		return nil, fmt.Errorf("DNSPod配置解析失败: %v", err)
 	}
 
-	return &DNSPodProvider{
+	provider := &DNSPodProvider{
 		token:   config.Token,
 		baseURL: "https://dnsapi.cn",
-	}, nil
+	}
+
+	// 验证配置有效性
+	if err := provider.validateConfig(); err != nil {
+		return nil, fmt.Errorf("DNSPod配置验证失败: %v", err)
+	}
+
+	return provider, nil
 }
 
 // CreateRecord 创建DNS记录
@@ -90,14 +97,14 @@ func (p *DNSPodProvider) CreateRecord(domain, subdomain, recordType, value strin
 
 	// 准备请求数据
 	data := map[string]string{
-		"login_token":   p.token,
-		"format":        "json",
-		"domain_id":     domainID,
-		"sub_domain":    subdomain,
-		"record_type":   recordType,
-		"record_line":   "默认",
-		"value":         value,
-		"ttl":           strconv.Itoa(ttl),
+		"login_token": p.token,
+		"format":      "json",
+		"domain_id":   domainID,
+		"sub_domain":  subdomain,
+		"record_type": recordType,
+		"record_line": "默认",
+		"value":       value,
+		"ttl":         strconv.Itoa(ttl),
 	}
 
 	// 发送创建请求
@@ -123,15 +130,15 @@ func (p *DNSPodProvider) UpdateRecord(domain, recordID, subdomain, recordType, v
 
 	// 准备请求数据
 	data := map[string]string{
-		"login_token":   p.token,
-		"format":        "json",
-		"domain_id":     domainID,
-		"record_id":     recordID,
-		"sub_domain":    subdomain,
-		"record_type":   recordType,
-		"record_line":   "默认",
-		"value":         value,
-		"ttl":           strconv.Itoa(ttl),
+		"login_token": p.token,
+		"format":      "json",
+		"domain_id":   domainID,
+		"record_id":   recordID,
+		"sub_domain":  subdomain,
+		"record_type": recordType,
+		"record_line": "默认",
+		"value":       value,
+		"ttl":         strconv.Itoa(ttl),
 	}
 
 	// 发送更新请求
@@ -337,7 +344,7 @@ func (p *DNSPodProvider) validateCreateRecordParams(domain, subdomain, recordTyp
 	if value == "" {
 		return fmt.Errorf("记录值不能为空")
 	}
-	
+
 	// 验证记录类型
 	validTypes := []string{"A", "AAAA", "CNAME", "TXT", "MX", "NS", "SRV", "CAA"}
 	isValidType := false
@@ -350,38 +357,38 @@ func (p *DNSPodProvider) validateCreateRecordParams(domain, subdomain, recordTyp
 	if !isValidType {
 		return fmt.Errorf("不支持的记录类型: %s", recordType)
 	}
-	
+
 	// 验证TTL范围
 	if ttl < 1 || ttl > 604800 {
 		return fmt.Errorf("TTL值必须在1-604800秒之间")
 	}
-	
+
 	return nil
 }
 
 // makeRequestWithRetry 带重试机制的请求方法
 func (p *DNSPodProvider) makeRequestWithRetry(method, endpoint string, data map[string]string, maxRetries int) (*DNSPodResponse, error) {
 	var lastErr error
-	
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// 指数退避
 			time.Sleep(time.Duration(attempt*attempt) * time.Second)
 		}
-		
+
 		resp, err := p.makeRequest(method, endpoint, data)
 		if err == nil {
 			return resp, nil
 		}
-		
+
 		lastErr = err
-		
+
 		// 检查是否可以重试
 		if !p.isRetryableError(err) {
 			break
 		}
 	}
-	
+
 	return nil, fmt.Errorf("请求失败，已重试%d次: %v", maxRetries, lastErr)
 }
 
@@ -390,14 +397,69 @@ func (p *DNSPodProvider) isRetryableError(err error) bool {
 	errStr := err.Error()
 	// 网络错误或服务器错误可以重试
 	return strings.Contains(errStr, "timeout") ||
-		   strings.Contains(errStr, "connection") ||
-		   strings.Contains(errStr, "server error")
+		strings.Contains(errStr, "connection") ||
+		strings.Contains(errStr, "server error")
+}
+
+// validateConfig 验证DNSPod配置
+func (p *DNSPodProvider) validateConfig() error {
+	// 基础配置检查
+	if p.token == "" {
+		return fmt.Errorf("DNSPod Token不能为空")
+	}
+
+	// Token格式检查
+	if !strings.Contains(p.token, ",") {
+		return fmt.Errorf("DNSPod Token格式不正确，应为：ID,Token")
+	}
+
+	parts := strings.Split(p.token, ",")
+	if len(parts) != 2 {
+		return fmt.Errorf("DNSPod Token格式不正确，应为：ID,Token")
+	}
+
+	if parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("DNSPod Token的ID或Token部分不能为空")
+	}
+
+	// 尝试连接测试
+	return p.testConnection()
+}
+
+// testConnection 测试DNSPod连接
+func (p *DNSPodProvider) testConnection() error {
+	// 尝试获取域名列表来验证token有效性
+	data := map[string]string{
+		"login_token": p.token,
+		"format":      "json",
+		"type":        "all",
+		"length":      "1", // 只获取1个域名用于测试
+	}
+
+	resp, err := p.makeRequest("POST", "/Domain.List", data)
+	if err != nil {
+		return fmt.Errorf("连接DNSPod API失败: %v", err)
+	}
+
+	// 检查API响应
+	switch resp.Status.Code {
+	case "1":
+		return nil // 连接成功
+	case "-1":
+		return fmt.Errorf("DNSPod Token无效或已过期")
+	case "-7":
+		return fmt.Errorf("DNSPod账户已被禁用")
+	case "-8":
+		return fmt.Errorf("DNSPod账户暂时被禁用（登录失败次数过多）")
+	default:
+		return fmt.Errorf("DNSPod连接测试失败: %s", resp.Status.Message)
+	}
 }
 
 // createFriendlyError 创建友好的错误信息
 func (p *DNSPodProvider) createFriendlyError(code, message string) error {
 	var friendlyMessage string
-	
+
 	switch code {
 	case "-1":
 		friendlyMessage = "登录失败，请检查Token是否正确"
@@ -432,6 +494,6 @@ func (p *DNSPodProvider) createFriendlyError(code, message string) error {
 	default:
 		friendlyMessage = message
 	}
-	
+
 	return fmt.Errorf("DNSPod API错误 [%s]: %s", code, friendlyMessage)
 }

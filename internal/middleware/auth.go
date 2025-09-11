@@ -3,6 +3,7 @@ package middleware
 import (
 	"domain-manager/internal/config"
 	"domain-manager/internal/models"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -21,8 +22,12 @@ func AuthRequired(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 		}
 
 		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
-		
+
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// 验证签名算法，防止算法替换攻击
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return []byte(cfg.JWTSecret), nil
 		})
 
@@ -68,7 +73,7 @@ func AdminRequired(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// 首先验证用户身份
 		AuthRequired(db, cfg)(c)
-		
+
 		if c.IsAborted() {
 			return
 		}

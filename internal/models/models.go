@@ -8,64 +8,76 @@ import (
 
 // 用户模型
 type User struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
-	Email       string         `json:"email" gorm:"uniqueIndex;not null"`
-	Password    string         `json:"-" gorm:"not null"` // 不返回密码字段
-	IsActive    bool           `json:"is_active" gorm:"default:false"`
-	IsAdmin     bool           `json:"is_admin" gorm:"default:false"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
-	
+	ID             uint           `json:"id" gorm:"primaryKey"`
+	Email          string         `json:"email" gorm:"uniqueIndex;not null;size:255"`
+	Password       string         `json:"-" gorm:"not null;size:255"` // bcrypt哈希后的密码
+	Nickname       string         `json:"nickname" gorm:"size:100"`   // 用户昵称
+	Avatar         string         `json:"avatar" gorm:"size:500"`     // 头像URL
+	IsActive       bool           `json:"is_active" gorm:"default:false;index"`
+	IsAdmin        bool           `json:"is_admin" gorm:"default:false;index"`
+	LastLoginAt    *time.Time     `json:"last_login_at"`                        // 最后登录时间
+	LoginCount     int            `json:"login_count" gorm:"default:0"`         // 登录次数
+	DNSRecordQuota int            `json:"dns_record_quota" gorm:"default:10"`   // DNS记录配额
+	Status         string         `json:"status" gorm:"default:normal;size:20"` // 用户状态：normal, suspended, banned
+	CreatedAt      time.Time      `json:"created_at" gorm:"index"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
+
 	// 关联
 	DNSRecords []DNSRecord `json:"dns_records,omitempty" gorm:"foreignKey:UserID"`
 }
 
 // 域名模型
 type Domain struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
-	Name      string         `json:"name" gorm:"uniqueIndex;not null"` // 主域名，如 example.com
-	IsActive  bool           `json:"is_active" gorm:"default:true"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
-	
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	Name        string         `json:"name" gorm:"uniqueIndex;not null"` // 主域名，如 example.com
+	DomainType  string         `json:"domain_type"`                      // 域名类型：二级域名、三级域名等
+	IsActive    bool           `json:"is_active" gorm:"default:true"`
+	Description string         `json:"description"` // 域名描述
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+
 	// 关联
 	DNSRecords []DNSRecord `json:"dns_records,omitempty" gorm:"foreignKey:DomainID"`
-	DomainType string
-	UserID     uint
-	User       User
 }
 
 // DNS记录模型
 type DNSRecord struct {
 	ID         uint           `json:"id" gorm:"primaryKey"`
-	UserID     uint           `json:"user_id" gorm:"not null"`
-	DomainID   uint           `json:"domain_id" gorm:"not null"`
-	Subdomain  string         `json:"subdomain" gorm:"not null"` // 子域名，如 www
-	Type       string         `json:"type" gorm:"not null"`      // A, CNAME, TXT等
-	Value      string         `json:"value" gorm:"not null"`     // 记录值
-	TTL        int            `json:"ttl" gorm:"default:600"`    // 生存时间
-	ExternalID string         `json:"external_id"`               // DNS服务商返回的记录ID
-	CreatedAt  time.Time      `json:"created_at"`
+	UserID     uint           `json:"user_id" gorm:"not null;index"`                           // 添加索引提升查询性能
+	DomainID   uint           `json:"domain_id" gorm:"not null;index"`                         // 添加索引
+	Subdomain  string         `json:"subdomain" gorm:"not null;size:63"`                       // 子域名，限制长度
+	Type       string         `json:"type" gorm:"not null;size:10;index"`                      // 记录类型，添加索引
+	Value      string         `json:"value" gorm:"not null;size:500"`                          // 记录值，限制长度
+	TTL        int            `json:"ttl" gorm:"default:600;check:ttl >= 1 AND ttl <= 604800"` // TTL范围检查
+	Priority   int            `json:"priority" gorm:"default:0"`                               // MX记录优先级
+	ExternalID string         `json:"external_id" gorm:"size:100"`                             // DNS服务商记录ID
+	Status     string         `json:"status" gorm:"default:active;size:20"`                    // 记录状态
+	Comment    string         `json:"comment" gorm:"size:255"`                                 // 记录备注
+	CreatedAt  time.Time      `json:"created_at" gorm:"index"`                                 // 添加时间索引
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
-	
+
 	// 关联
-	User   User   `json:"user,omitempty" gorm:"foreignKey:UserID"`
-	Domain Domain `json:"domain,omitempty" gorm:"foreignKey:DomainID"`
+	User   User   `json:"user,omitempty" gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"`
+	Domain Domain `json:"domain,omitempty" gorm:"foreignKey:DomainID;constraint:OnDelete:CASCADE"`
 }
 
 // DNS服务商模型
 type DNSProvider struct {
-	ID        uint           `json:"id" gorm:"primaryKey"`
-	Name      string         `json:"name" gorm:"not null"`        // 服务商名称，如 DNSPod
-	Type      string         `json:"type" gorm:"not null"`        // 服务商类型，如 dnspod
-	Config    string         `json:"config" gorm:"type:text"`     // JSON格式的配置信息
-	IsActive  bool           `json:"is_active" gorm:"default:true"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	Name        string         `json:"name" gorm:"not null;size:100;uniqueIndex"` // 服务商名称唯一
+	Type        string         `json:"type" gorm:"not null;size:50;index"`        // 服务商类型索引
+	Config      string         `json:"config" gorm:"type:text"`                   // JSON格式配置
+	IsActive    bool           `json:"is_active" gorm:"default:false;index"`      // 默认禁用，添加索引
+	Description string         `json:"description" gorm:"size:500"`               // 服务商描述
+	SortOrder   int            `json:"sort_order" gorm:"default:0"`               // 排序字段
+	LastTestAt  *time.Time     `json:"last_test_at"`                              // 最后测试时间
+	TestResult  string         `json:"test_result" gorm:"size:1000"`              // 测试结果
+	CreatedAt   time.Time      `json:"created_at" gorm:"index"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // 邮箱验证模型

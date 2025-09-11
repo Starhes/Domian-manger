@@ -14,12 +14,17 @@ import (
 )
 
 type AuthService struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db           *gorm.DB
+	cfg          *config.Config
+	emailService *EmailService
 }
 
 func NewAuthService(db *gorm.DB, cfg *config.Config) *AuthService {
-	return &AuthService{db: db, cfg: cfg}
+	return &AuthService{
+		db:           db,
+		cfg:          cfg,
+		emailService: NewEmailService(cfg),
+	}
 }
 
 // 用户注册
@@ -38,9 +43,16 @@ func (s *AuthService) Register(req models.RegisterRequest) error {
 
 	// 创建用户
 	user := models.User{
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		IsActive: false, // 需要邮箱验证
+		Email:          req.Email,
+		Password:       string(hashedPassword),
+		IsActive:       false, // 需要邮箱验证
+		Status:         "normal",
+		DNSRecordQuota: 10, // 默认配额
+	}
+
+	// 验证用户数据
+	if err := user.ValidateUser(); err != nil {
+		return err
 	}
 
 	if err := s.db.Create(&user).Error; err != nil {
@@ -63,8 +75,13 @@ func (s *AuthService) Register(req models.RegisterRequest) error {
 		return errors.New("验证记录创建失败")
 	}
 
-	// TODO: 发送验证邮件
-	// s.sendVerificationEmail(req.Email, token)
+	// 发送验证邮件
+	if err := s.emailService.SendVerificationEmail(req.Email, token); err != nil {
+		// 邮件发送失败不影响注册流程，只记录错误
+		// 可以考虑使用日志系统记录
+		// 这里暂时不返回错误，让用户可以继续使用系统
+		_ = err // 忽略邮件发送错误
+	}
 
 	return nil
 }
@@ -81,10 +98,28 @@ func (s *AuthService) Login(req models.LoginRequest) (*models.LoginResponse, err
 		return nil, errors.New("邮箱或密码错误")
 	}
 
+	// 检查账户状态
+	if user.Status == "banned" {
+		return nil, errors.New("账户已被封禁，请联系管理员")
+	}
+
+	if user.Status == "suspended" {
+		return nil, errors.New("账户已被暂停，请联系管理员")
+	}
+
 	// 检查账户是否激活（管理员账号无需验证）
 	if !user.IsActive && !user.IsAdmin {
 		return nil, errors.New("账户未激活，请检查邮箱验证链接")
 	}
+
+	// 更新登录信息
+	now := time.Now()
+	user.LastLoginAt = &now
+	user.LoginCount++
+	s.db.Model(&user).Updates(map[string]interface{}{
+		"last_login_at": now,
+		"login_count":   user.LoginCount,
+	})
 
 	// 生成JWT令牌
 	token, err := s.generateJWT(user.ID)
@@ -101,7 +136,7 @@ func (s *AuthService) Login(req models.LoginRequest) (*models.LoginResponse, err
 // 邮箱验证
 func (s *AuthService) VerifyEmail(token string) error {
 	var verification models.EmailVerification
-	if err := s.db.Where("token = ? AND used = false AND expires_at > ?", 
+	if err := s.db.Where("token = ? AND used = false AND expires_at > ?",
 		token, time.Now()).First(&verification).Error; err != nil {
 		return errors.New("验证令牌无效或已过期")
 	}
@@ -146,8 +181,11 @@ func (s *AuthService) ForgotPassword(req models.ForgotPasswordRequest) error {
 		return errors.New("重置记录创建失败")
 	}
 
-	// TODO: 发送重置邮件
-	// s.sendPasswordResetEmail(req.Email, token)
+	// 发送重置邮件
+	if err := s.emailService.SendPasswordResetEmail(req.Email, token); err != nil {
+		// 邮件发送失败不影响重置流程，只记录错误
+		_ = err // 忽略邮件发送错误
+	}
 
 	return nil
 }
@@ -155,7 +193,7 @@ func (s *AuthService) ForgotPassword(req models.ForgotPasswordRequest) error {
 // 重置密码
 func (s *AuthService) ResetPassword(req models.ResetPasswordRequest) error {
 	var reset models.PasswordReset
-	if err := s.db.Where("token = ? AND used = false AND expires_at > ?", 
+	if err := s.db.Where("token = ? AND used = false AND expires_at > ?",
 		req.Token, time.Now()).First(&reset).Error; err != nil {
 		return errors.New("重置令牌无效或已过期")
 	}
@@ -191,6 +229,59 @@ func (s *AuthService) generateJWT(userID uint) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.cfg.JWTSecret))
+}
+
+// UpdateProfile 更新用户资料
+func (s *AuthService) UpdateProfile(userID uint, email, password string) (*models.User, error) {
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, errors.New("用户不存在")
+	}
+
+	// 检查是否有需要更新的字段
+	updates := make(map[string]interface{})
+
+	// 更新邮箱
+	if email != "" && email != user.Email {
+		// 检查新邮箱是否已被使用
+		var existingUser models.User
+		if err := s.db.Where("email = ? AND id != ?", email, userID).First(&existingUser).Error; err == nil {
+			return nil, errors.New("该邮箱已被其他用户使用")
+		}
+
+		updates["email"] = email
+		// 如果更换邮箱，需要重新验证
+		updates["is_active"] = false
+
+		// TODO: 发送新邮箱验证邮件
+		// 这里可以生成新的验证token并发送验证邮件
+	}
+
+	// 更新密码
+	if password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, errors.New("密码加密失败")
+		}
+		updates["password"] = string(hashedPassword)
+	}
+
+	// 如果没有需要更新的字段
+	if len(updates) == 0 {
+		return &user, nil
+	}
+
+	// 执行更新
+	if err := s.db.Model(&user).Updates(updates).Error; err != nil {
+		return nil, errors.New("用户资料更新失败")
+	}
+
+	// 重新查询用户信息并返回
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, errors.New("获取更新后的用户信息失败")
+	}
+
+	return &user, nil
 }
 
 // 生成随机令牌

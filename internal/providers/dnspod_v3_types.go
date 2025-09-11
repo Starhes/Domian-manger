@@ -87,35 +87,35 @@ type DeleteRecordRequest struct {
 
 // DomainInfo 域名信息
 type DomainInfo struct {
-	DomainId     uint64    `json:"DomainId"`     // Integer：域名ID
-	Name         string    `json:"Name"`         // String：域名名称
-	Status       string    `json:"Status"`       // String：域名状态
-	TTL          uint64    `json:"TTL"`          // Integer：默认TTL
-	CNAMESpeedup string    `json:"CNAMESpeedup"` // String：CNAME加速状态
-	DNSStatus    string    `json:"DNSStatus"`    // String：DNS状态
-	Grade        string    `json:"Grade"`        // String：域名等级
-	GroupId      uint64    `json:"GroupId"`      // Integer：分组ID
+	DomainId         uint64 `json:"DomainId"`         // Integer：域名ID
+	Name             string `json:"Name"`             // String：域名名称
+	Status           string `json:"Status"`           // String：域名状态
+	TTL              uint64 `json:"TTL"`              // Integer：默认TTL
+	CNAMESpeedup     string `json:"CNAMESpeedup"`     // String：CNAME加速状态
+	DNSStatus        string `json:"DNSStatus"`        // String：DNS状态
+	Grade            string `json:"Grade"`            // String：域名等级
+	GroupId          uint64 `json:"GroupId"`          // Integer：分组ID
 	SearchEnginePush string `json:"SearchEnginePush"` // String：搜索引擎推送状态
-	Remark       string    `json:"Remark"`       // String：备注
-	CreatedOn    string    `json:"CreatedOn"`    // Timestamp：创建时间
-	UpdatedOn    string    `json:"UpdatedOn"`    // Timestamp：更新时间
+	Remark           string `json:"Remark"`           // String：备注
+	CreatedOn        string `json:"CreatedOn"`        // Timestamp：创建时间
+	UpdatedOn        string `json:"UpdatedOn"`        // Timestamp：更新时间
 }
 
 // RecordInfo 记录信息
 type RecordInfo struct {
-	RecordId    uint64 `json:"RecordId"`    // Integer：记录ID
-	Name        string `json:"Name"`        // String：子域名
-	Type        string `json:"Type"`        // String：记录类型
-	Value       string `json:"Value"`       // String：记录值
-	TTL         uint64 `json:"TTL"`         // Integer：TTL值
-	Status      string `json:"Status"`      // String：记录状态
-	Line        string `json:"Line"`        // String：线路类型
-	LineId      string `json:"LineId"`      // String：线路ID
-	Weight      uint64 `json:"Weight"`      // Integer：权重
+	RecordId      uint64 `json:"RecordId"`      // Integer：记录ID
+	Name          string `json:"Name"`          // String：子域名
+	Type          string `json:"Type"`          // String：记录类型
+	Value         string `json:"Value"`         // String：记录值
+	TTL           uint64 `json:"TTL"`           // Integer：TTL值
+	Status        string `json:"Status"`        // String：记录状态
+	Line          string `json:"Line"`          // String：线路类型
+	LineId        string `json:"LineId"`        // String：线路ID
+	Weight        uint64 `json:"Weight"`        // Integer：权重
 	MonitorStatus string `json:"MonitorStatus"` // String：监控状态
-	Remark      string `json:"Remark"`      // String：备注
-	UpdatedOn   string `json:"UpdatedOn"`   // Timestamp：更新时间
-	DomainId    uint64 `json:"DomainId"`    // Integer：域名ID
+	Remark        string `json:"Remark"`        // String：备注
+	UpdatedOn     string `json:"UpdatedOn"`     // Timestamp：更新时间
+	DomainId      uint64 `json:"DomainId"`      // Integer：域名ID
 }
 
 // 参数类型转换辅助函数
@@ -228,12 +228,12 @@ func ValidateDomainName(domain string) error {
 	if err := ValidateStringLength(domain, 1, 253); err != nil {
 		return fmt.Errorf("域名%v", err)
 	}
-	
+
 	// 简单的域名格式验证
 	if len(domain) == 0 {
 		return fmt.Errorf("域名不能为空")
 	}
-	
+
 	// 更详细的域名格式验证可以在这里添加
 	return nil
 }
@@ -243,7 +243,7 @@ func ValidateSubdomain(subdomain string) error {
 	if err := ValidateStringLength(subdomain, 1, 63); err != nil {
 		return fmt.Errorf("子域名%v", err)
 	}
-	
+
 	// 子域名不能包含某些特殊字符
 	// 更详细的验证逻辑可以在这里添加
 	return nil
@@ -276,7 +276,7 @@ func SafeIntToUint64(i int) uint64 {
 func SafeUint64ToInt(i uint64) int {
 	// 检查溢出
 	if i > uint64(^uint(0)>>1) {
-		return int(^uint(0)>>1) // 返回int最大值
+		return int(^uint(0) >> 1) // 返回int最大值
 	}
 	return int(i)
 }
@@ -291,15 +291,15 @@ func BuildCreateRecordParams(domain, subdomain, recordType, value string, ttl in
 		"RecordType": recordType, // String
 		"Value":      value,      // String
 	}
-	
+
 	// 可选参数
 	if ttl > 0 {
 		params["TTL"] = SafeIntToUint64(ttl) // Integer (uint64)
 	}
-	
+
 	// 设置默认线路
 	params["RecordLine"] = "默认" // String
-	
+
 	return params
 }
 
@@ -310,7 +310,7 @@ func BuildModifyRecordParams(domain, recordID, subdomain, recordType, value stri
 	if err != nil {
 		return nil, fmt.Errorf("无效的记录ID: %v", err)
 	}
-	
+
 	params := map[string]interface{}{
 		"Domain":     domain,     // String
 		"RecordId":   recordId,   // Integer (uint64)
@@ -318,15 +318,15 @@ func BuildModifyRecordParams(domain, recordID, subdomain, recordType, value stri
 		"RecordType": recordType, // String
 		"Value":      value,      // String
 	}
-	
+
 	// 可选参数
 	if ttl > 0 {
 		params["TTL"] = SafeIntToUint64(ttl) // Integer (uint64)
 	}
-	
+
 	// 设置默认线路
 	params["RecordLine"] = "默认" // String
-	
+
 	return params, nil
 }
 
@@ -337,12 +337,12 @@ func BuildDeleteRecordParams(domain, recordID string) (map[string]interface{}, e
 	if err != nil {
 		return nil, fmt.Errorf("无效的记录ID: %v", err)
 	}
-	
+
 	params := map[string]interface{}{
 		"Domain":   domain,   // String
 		"RecordId": recordId, // Integer (uint64)
 	}
-	
+
 	return params, nil
 }
 
@@ -353,7 +353,7 @@ func BuildDescribeRecordListParams(domain string) map[string]interface{} {
 		"Limit":  uint64(100), // Integer (uint64) - 每页最多100条
 		"Offset": uint64(0),   // Integer (uint64) - 从第一条开始
 	}
-	
+
 	return params
 }
 
@@ -363,12 +363,12 @@ func BuildDescribeDomainListParams(keyword string) map[string]interface{} {
 		"Limit":  uint64(20), // Integer (uint64)
 		"Offset": uint64(0),  // Integer (uint64)
 	}
-	
+
 	// 可选参数
 	if keyword != "" {
 		params["Keyword"] = keyword // String
 	}
-	
+
 	return params
 }
 
@@ -380,17 +380,17 @@ func ValidateCreateRecordParams(domain, subdomain, recordType, value string, ttl
 	if err := ValidateDomainName(domain); err != nil {
 		return err
 	}
-	
+
 	// 验证子域名
 	if err := ValidateSubdomain(subdomain); err != nil {
 		return err
 	}
-	
+
 	// 验证记录类型和值的组合
 	if err := ValidateRecordTypeAndValue(recordType, value); err != nil {
 		return err
 	}
-	
+
 	// 验证TTL
 	if ttl > 0 {
 		if err := ValidateTTL(uint64(ttl)); err != nil {
@@ -400,7 +400,7 @@ func ValidateCreateRecordParams(domain, subdomain, recordType, value string, ttl
 		// 如果TTL为0或负数，使用默认值
 		ttl = int(GetDefaultTTL(recordType))
 	}
-	
+
 	return nil
 }
 
@@ -410,7 +410,7 @@ func ValidateModifyRecordParams(domain, recordID, subdomain, recordType, value s
 	if _, err := SafeStringToUint64(recordID); err != nil {
 		return fmt.Errorf("无效的记录ID: %v", err)
 	}
-	
+
 	// 验证其他参数
 	return ValidateCreateRecordParams(domain, subdomain, recordType, value, ttl)
 }
@@ -446,7 +446,7 @@ func MarshalParams(params map[string]interface{}) ([]byte, error) {
 			return nil, fmt.Errorf("不支持的参数类型: %T for key %s", v, key)
 		}
 	}
-	
+
 	return json.Marshal(params)
 }
 
@@ -457,21 +457,21 @@ func ParseTimestamp(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil
 	}
-	
+
 	// 尝试不同的时间格式
 	formats := []string{
-		"2006-01-02 15:04:05",  // Timestamp格式
-		"2006-01-02",           // Date格式
-		time.RFC3339,           // ISO8601格式
-		time.RFC3339Nano,       // ISO8601带纳秒
+		"2006-01-02 15:04:05", // Timestamp格式
+		"2006-01-02",          // Date格式
+		time.RFC3339,          // ISO8601格式
+		time.RFC3339Nano,      // ISO8601带纳秒
 	}
-	
+
 	for _, format := range formats {
 		if t, err := time.Parse(format, s); err == nil {
 			return t, nil
 		}
 	}
-	
+
 	return time.Time{}, fmt.Errorf("无法解析时间戳: %s", s)
 }
 
@@ -491,24 +491,24 @@ func ConvertRecordInfo(info RecordInfo, domainName string) DNSRecord {
 // ConvertDomainInfo 将腾讯云API的DomainInfo转换为内部格式
 func ConvertDomainInfo(info DomainInfo) map[string]interface{} {
 	result := map[string]interface{}{
-		"domain_id": info.DomainId,  // Integer → uint64
-		"name":      info.Name,      // String
-		"status":    info.Status,    // String
-		"ttl":       info.TTL,       // Integer → uint64
-		"grade":     info.Grade,     // String
-		"group_id":  info.GroupId,   // Integer → uint64
-		"remark":    info.Remark,    // String
+		"domain_id": info.DomainId, // Integer → uint64
+		"name":      info.Name,     // String
+		"status":    info.Status,   // String
+		"ttl":       info.TTL,      // Integer → uint64
+		"grade":     info.Grade,    // String
+		"group_id":  info.GroupId,  // Integer → uint64
+		"remark":    info.Remark,   // String
 	}
-	
+
 	// 时间字段转换
 	if createdOn, err := ParseTimestamp(info.CreatedOn); err == nil {
 		result["created_on"] = createdOn // Timestamp → time.Time
 	}
-	
+
 	if updatedOn, err := ParseTimestamp(info.UpdatedOn); err == nil {
 		result["updated_on"] = updatedOn // Timestamp → time.Time
 	}
-	
+
 	return result
 }
 
@@ -517,7 +517,7 @@ func ValidateRecordTypeAndValue(recordType, value string) error {
 	if err := ValidateRecordType(recordType); err != nil {
 		return err
 	}
-	
+
 	// 根据记录类型验证记录值格式
 	switch recordType {
 	case "A":
@@ -561,7 +561,7 @@ func ValidateRecordTypeAndValue(recordType, value string) error {
 			return fmt.Errorf("CAA记录值格式错误: %v", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -571,14 +571,14 @@ func ValidateIPv4(ip string) error {
 	if len(parts) != 4 {
 		return fmt.Errorf("IPv4地址格式错误")
 	}
-	
+
 	for _, part := range parts {
 		num, err := strconv.Atoi(part)
 		if err != nil || num < 0 || num > 255 {
 			return fmt.Errorf("IPv4地址格式错误")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -588,7 +588,7 @@ func ValidateIPv6(ip string) error {
 	if len(ip) < 2 || len(ip) > 39 {
 		return fmt.Errorf("IPv6地址格式错误")
 	}
-	
+
 	// 检查是否包含有效的IPv6字符
 	validChars := "0123456789abcdefABCDEF:"
 	for _, char := range ip {
@@ -596,7 +596,7 @@ func ValidateIPv6(ip string) error {
 			return fmt.Errorf("IPv6地址包含无效字符")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -606,13 +606,13 @@ func ValidateMXRecord(value string) error {
 	if len(parts) != 2 {
 		return fmt.Errorf("MX记录格式应为: 优先级 邮件服务器域名")
 	}
-	
+
 	// 验证优先级
 	priority, err := strconv.Atoi(parts[0])
 	if err != nil || priority < 0 || priority > 65535 {
 		return fmt.Errorf("MX记录优先级必须是0-65535之间的数字")
 	}
-	
+
 	// 验证邮件服务器域名
 	return ValidateDomainName(parts[1])
 }
@@ -623,25 +623,25 @@ func ValidateSRVRecord(value string) error {
 	if len(parts) != 4 {
 		return fmt.Errorf("SRV记录格式应为: 优先级 权重 端口 目标")
 	}
-	
+
 	// 验证优先级
 	priority, err := strconv.Atoi(parts[0])
 	if err != nil || priority < 0 || priority > 65535 {
 		return fmt.Errorf("SRV记录优先级必须是0-65535之间的数字")
 	}
-	
+
 	// 验证权重
 	weight, err := strconv.Atoi(parts[1])
 	if err != nil || weight < 0 || weight > 65535 {
 		return fmt.Errorf("SRV记录权重必须是0-65535之间的数字")
 	}
-	
+
 	// 验证端口
 	port, err := strconv.Atoi(parts[2])
 	if err != nil || port < 0 || port > 65535 {
 		return fmt.Errorf("SRV记录端口必须是0-65535之间的数字")
 	}
-	
+
 	// 验证目标域名
 	return ValidateDomainName(parts[3])
 }
@@ -652,13 +652,13 @@ func ValidateCAARecord(value string) error {
 	if len(parts) < 3 {
 		return fmt.Errorf("CAA记录格式应为: 标志 标签 值")
 	}
-	
+
 	// 验证标志
 	flag, err := strconv.Atoi(parts[0])
 	if err != nil || flag < 0 || flag > 255 {
 		return fmt.Errorf("CAA记录标志必须是0-255之间的数字")
 	}
-	
+
 	// 验证标签
 	tag := parts[1]
 	validTags := []string{"issue", "issuewild", "iodef"}
@@ -672,28 +672,28 @@ func ValidateCAARecord(value string) error {
 	if !isValidTag {
 		return fmt.Errorf("CAA记录标签必须是issue、issuewild或iodef之一")
 	}
-	
+
 	return nil
 }
 
 // 扩展的线路类型定义
 var ValidRecordLines = map[string]string{
-	"默认":     "默认",
-	"国内":     "国内",
-	"国外":     "国外",
-	"电信":     "电信",
-	"联通":     "联通",
-	"移动":     "移动",
-	"铁通":     "铁通",
-	"教育网":    "教育网",
-	"搜索引擎":   "搜索引擎",
-	"百度":     "百度",
-	"谷歌":     "谷歌",
-	"必应":     "必应",
-	"搜狗":     "搜狗",
-	"奇虎":     "奇虎",
-	"有道":     "有道",
-	"搜搜":     "搜搜",
+	"默认":   "默认",
+	"国内":   "国内",
+	"国外":   "国外",
+	"电信":   "电信",
+	"联通":   "联通",
+	"移动":   "移动",
+	"铁通":   "铁通",
+	"教育网":  "教育网",
+	"搜索引擎": "搜索引擎",
+	"百度":   "百度",
+	"谷歌":   "谷歌",
+	"必应":   "必应",
+	"搜狗":   "搜狗",
+	"奇虎":   "奇虎",
+	"有道":   "有道",
+	"搜搜":   "搜搜",
 }
 
 // ValidateRecordLine 验证解析线路
@@ -701,11 +701,11 @@ func ValidateRecordLine(line string) error {
 	if line == "" {
 		return nil // 空值使用默认线路
 	}
-	
+
 	if _, exists := ValidRecordLines[line]; !exists {
 		return fmt.Errorf("不支持的解析线路: %s", line)
 	}
-	
+
 	return nil
 }
 
@@ -713,20 +713,20 @@ func ValidateRecordLine(line string) error {
 func GetDefaultTTL(recordType string) uint64 {
 	switch recordType {
 	case "A", "AAAA":
-		return 600  // 10分钟
+		return 600 // 10分钟
 	case "CNAME":
-		return 600  // 10分钟
+		return 600 // 10分钟
 	case "MX":
 		return 3600 // 1小时
 	case "TXT":
-		return 600  // 10分钟
+		return 600 // 10分钟
 	case "NS":
 		return 3600 // 1小时
 	case "SRV":
-		return 600  // 10分钟
+		return 600 // 10分钟
 	case "CAA":
 		return 3600 // 1小时
 	default:
-		return 600  // 默认10分钟
+		return 600 // 默认10分钟
 	}
 }

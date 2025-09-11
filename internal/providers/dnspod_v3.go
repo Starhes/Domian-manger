@@ -55,7 +55,7 @@ type DescribeDomainsResponse struct {
 			Message string `json:"Message"`
 		} `json:"Error,omitempty"`
 		RequestId string `json:"RequestId"`
-		
+
 		// 业务数据字段
 		DomainList []struct {
 			DomainId uint64 `json:"DomainId"`
@@ -76,7 +76,7 @@ type DescribeRecordListResponse struct {
 			Message string `json:"Message"`
 		} `json:"Error,omitempty"`
 		RequestId string `json:"RequestId"`
-		
+
 		// 业务数据字段
 		RecordCountInfo struct {
 			TotalCount uint64 `json:"TotalCount"`
@@ -101,7 +101,7 @@ type CreateRecordResponse struct {
 			Message string `json:"Message"`
 		} `json:"Error,omitempty"`
 		RequestId string `json:"RequestId"`
-		
+
 		// 业务数据字段
 		RecordId uint64 `json:"RecordId,omitempty"`
 	} `json:"Response"`
@@ -139,26 +139,26 @@ func validateDNSPodV3Config(config DNSPodV3Config) error {
 	if config.SecretId == "" {
 		return fmt.Errorf("SecretId不能为空")
 	}
-	
+
 	if config.SecretKey == "" {
 		return fmt.Errorf("SecretKey不能为空")
 	}
-	
+
 	// 验证SecretId格式（通常以AKID开头）
 	if !strings.HasPrefix(config.SecretId, "AKID") {
 		return fmt.Errorf("SecretId格式不正确，应以AKID开头")
 	}
-	
+
 	// 验证SecretId长度（通常为36位）
 	if len(config.SecretId) != 36 {
 		return fmt.Errorf("SecretId长度不正确，应为36位")
 	}
-	
+
 	// 验证SecretKey长度（通常为32位）
 	if len(config.SecretKey) != 32 {
 		return fmt.Errorf("SecretKey长度不正确，应为32位")
 	}
-	
+
 	// 验证地域格式（如果指定）
 	if config.Region != "" {
 		validRegions := []string{
@@ -167,7 +167,7 @@ func validateDNSPodV3Config(config DNSPodV3Config) error {
 			"ap-jakarta", "ap-bangkok", "ap-seoul", "ap-tokyo",
 			"na-ashburn", "na-siliconvalley", "sa-saopaulo", "eu-frankfurt",
 		}
-		
+
 		isValidRegion := false
 		for _, validRegion := range validRegions {
 			if config.Region == validRegion {
@@ -175,12 +175,12 @@ func validateDNSPodV3Config(config DNSPodV3Config) error {
 				break
 			}
 		}
-		
+
 		if !isValidRegion {
 			return fmt.Errorf("不支持的地域: %s", config.Region)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -304,36 +304,36 @@ func (p *DNSPodV3Provider) makeRequest(action string, params map[string]interfac
 func (p *DNSPodV3Provider) makeRequestWithRetry(action string, params map[string]interface{}, result interface{}, maxRetries int) error {
 	var lastErr error
 	startTime := time.Now()
-	
+
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// 记录重试信息
 		if attempt > 0 {
 			backoffDuration := time.Duration(attempt*attempt) * time.Second
 			time.Sleep(backoffDuration) // 指数退避
 		}
-		
+
 		// 执行单次请求
 		requestId, err := p.doSingleRequest(action, params, result)
-		
+
 		// 记录API调用
 		p.logAPICall(action, err == nil, requestId, time.Since(startTime))
-		
+
 		if err == nil {
 			return nil // 成功
 		}
-		
+
 		lastErr = err
-		
+
 		// 检查是否可以重试（通过错误消息中的错误码判断）
 		if strings.Contains(err.Error(), "腾讯云DNSPod API错误") {
 			// 提取错误码进行重试判断
 			isRetryable := false
 			if strings.Contains(err.Error(), "[InternalError]") ||
-			   strings.Contains(err.Error(), "[RequestLimitExceeded]") ||
-			   strings.Contains(err.Error(), "[ResourceUnavailable]") {
+				strings.Contains(err.Error(), "[RequestLimitExceeded]") ||
+				strings.Contains(err.Error(), "[ResourceUnavailable]") {
 				isRetryable = true
 			}
-			
+
 			if !isRetryable {
 				break // 不可重试的错误，直接返回
 			}
@@ -341,7 +341,7 @@ func (p *DNSPodV3Provider) makeRequestWithRetry(action string, params map[string
 			break // 非腾讯云API错误，直接返回
 		}
 	}
-	
+
 	return fmt.Errorf("请求失败，已重试%d次: %v", maxRetries, lastErr)
 }
 
@@ -351,7 +351,7 @@ func (p *DNSPodV3Provider) doSingleRequest(action string, params map[string]inte
 	if action == "" {
 		return "", fmt.Errorf("Action参数不能为空")
 	}
-	
+
 	// 准备请求体 - 使用类型安全的序列化
 	jsonParams, err := MarshalParams(params)
 	if err != nil {
@@ -366,27 +366,27 @@ func (p *DNSPodV3Provider) doSingleRequest(action string, params map[string]inte
 
 	// 设置请求头 - 按照公共参数规范
 	timestamp := time.Now().Unix()
-	
+
 	// 验证时间戳
 	if err := validateTimestamp(timestamp); err != nil {
 		return "", fmt.Errorf("时间戳验证失败: %v", err)
 	}
-	
+
 	date := time.Unix(timestamp, 0).UTC().Format("2006-01-02")
 	host := strings.TrimPrefix(p.baseURL, "https://")
 
 	// 必选公共参数（通过HTTP Header传递）
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	req.Header.Set("Host", host)
-	req.Header.Set("X-TC-Action", action)                                    // Action - 操作的接口名称
-	req.Header.Set("X-TC-Version", "2021-03-23")                           // Version - API版本
-	req.Header.Set("X-TC-Timestamp", strconv.FormatInt(timestamp, 10))     // Timestamp - UNIX时间戳
-	
+	req.Header.Set("X-TC-Action", action)                              // Action - 操作的接口名称
+	req.Header.Set("X-TC-Version", "2021-03-23")                       // Version - API版本
+	req.Header.Set("X-TC-Timestamp", strconv.FormatInt(timestamp, 10)) // Timestamp - UNIX时间戳
+
 	// 可选公共参数
 	if p.region != "" {
-		req.Header.Set("X-TC-Region", p.region)                            // Region - 地域参数
+		req.Header.Set("X-TC-Region", p.region) // Region - 地域参数
 	}
-	
+
 	// 设置语言为中文（可选）
 	req.Header.Set("X-TC-Language", "zh-CN")
 
@@ -439,17 +439,17 @@ func (p *DNSPodV3Provider) calculateSignature(req *http.Request, payload string,
 	httpRequestMethod := req.Method
 	canonicalURI := "/"
 	canonicalQueryString := ""
-	
+
 	// 拼接规范头部 - 必须包含content-type和host，可选x-tc-action，按字母序排列
 	contentType := req.Header.Get("Content-Type")
 	host := req.Header.Get("Host")
 	action := strings.ToLower(req.Header.Get("X-TC-Action"))
 	canonicalHeaders := fmt.Sprintf("content-type:%s\nhost:%s\nx-tc-action:%s\n", contentType, host, action)
 	signedHeaders := "content-type;host;x-tc-action"
-	
+
 	// 计算payload哈希
 	hashedPayload := sha256Hash(payload)
-	
+
 	// 拼接规范请求串
 	canonicalRequest := fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s",
 		httpRequestMethod, canonicalURI, canonicalQueryString,
@@ -457,7 +457,7 @@ func (p *DNSPodV3Provider) calculateSignature(req *http.Request, payload string,
 
 	// 步骤2：拼接待签名字符串
 	algorithm := "TC3-HMAC-SHA256"
-	service := "dnspod"  // 产品名，对应dnspod.tencentcloudapi.com
+	service := "dnspod" // 产品名，对应dnspod.tencentcloudapi.com
 	credentialScope := fmt.Sprintf("%s/%s/tc3_request", date, service)
 	hashedCanonicalRequest := sha256Hash(canonicalRequest)
 	stringToSign := fmt.Sprintf("%s\n%d\n%s\n%s",
@@ -499,12 +499,12 @@ func validateTimestamp(timestamp int64) error {
 	if diff < 0 {
 		diff = -diff
 	}
-	
+
 	// 时间戳与服务器时间相差不能超过5分钟
 	if diff > 300 {
 		return fmt.Errorf("时间戳无效，与服务器时间相差超过5分钟")
 	}
-	
+
 	return nil
 }
 
@@ -529,14 +529,14 @@ func (p *DNSPodV3Provider) checkAPIError(body []byte, result interface{}) error 
 	if err := json.Unmarshal(body, &errorCheck); err != nil {
 		return fmt.Errorf("响应解析失败: %v", err)
 	}
-	
+
 	// 检查是否有错误字段
 	if errorCheck.Response.Error != nil {
-		return p.createAPIError(errorCheck.Response.Error.Code, 
-			errorCheck.Response.Error.Message, 
+		return p.createAPIError(errorCheck.Response.Error.Code,
+			errorCheck.Response.Error.Message,
 			errorCheck.Response.RequestId)
 	}
-	
+
 	return nil
 }
 
@@ -544,7 +544,7 @@ func (p *DNSPodV3Provider) checkAPIError(body []byte, result interface{}) error 
 func (p *DNSPodV3Provider) createAPIError(code, message, requestId string) error {
 	// 根据错误码提供更友好的错误信息
 	var friendlyMessage string
-	
+
 	switch code {
 	case "AuthFailure.SignatureExpire":
 		friendlyMessage = "签名已过期，请检查系统时间是否同步（误差不能超过5分钟）"
@@ -571,26 +571,26 @@ func (p *DNSPodV3Provider) createAPIError(code, message, requestId string) error
 	default:
 		friendlyMessage = message
 	}
-	
+
 	// 返回结构化错误信息
-	return fmt.Errorf("腾讯云DNSPod API错误 [%s]: %s (RequestId: %s)", 
+	return fmt.Errorf("腾讯云DNSPod API错误 [%s]: %s (RequestId: %s)",
 		code, friendlyMessage, requestId)
 }
 
 // isRetryableError 判断错误是否可以重试
 func (p *DNSPodV3Provider) isRetryableError(code string) bool {
 	retryableCodes := []string{
-		"InternalError",           // 内部错误
-		"RequestLimitExceeded",    // 请求频率限制
-		"ResourceUnavailable",     // 资源不可用
+		"InternalError",        // 内部错误
+		"RequestLimitExceeded", // 请求频率限制
+		"ResourceUnavailable",  // 资源不可用
 	}
-	
+
 	for _, retryableCode := range retryableCodes {
 		if code == retryableCode {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -600,11 +600,11 @@ func (p *DNSPodV3Provider) logAPICall(action string, success bool, requestId str
 	if !success {
 		status = "FAILED"
 	}
-	
+
 	// 在生产环境中，这些信息应该记录到日志系统
 	// 这里仅作为示例
 	if false { // 可以通过环境变量控制
-		fmt.Printf("[DNSPod API] %s %s - RequestId: %s, Duration: %v\n", 
+		fmt.Printf("[DNSPod API] %s %s - RequestId: %s, Duration: %v\n",
 			action, status, requestId, duration)
 	}
 }
@@ -615,7 +615,7 @@ func (p *DNSPodV3Provider) GetRecordByID(domain, recordID string) (*DNSRecord, e
 	if err := ValidateDomainName(domain); err != nil {
 		return nil, fmt.Errorf("域名验证失败: %v", err)
 	}
-	
+
 	// 将recordID从string转换为uint64
 	recordId, err := SafeStringToUint64(recordID)
 	if err != nil {
@@ -636,7 +636,7 @@ func (p *DNSPodV3Provider) GetRecordByID(domain, recordID string) (*DNSRecord, e
 				Message string `json:"Message"`
 			} `json:"Error,omitempty"`
 			RequestId string `json:"RequestId"`
-			
+
 			RecordInfo struct {
 				RecordId uint64 `json:"RecordId"`
 				Name     string `json:"Name"`
@@ -648,7 +648,7 @@ func (p *DNSPodV3Provider) GetRecordByID(domain, recordID string) (*DNSRecord, e
 			} `json:"RecordInfo,omitempty"`
 		} `json:"Response"`
 	}
-	
+
 	if err := p.makeRequest("DescribeRecord", params, &resp); err != nil {
 		return nil, err
 	}
@@ -673,12 +673,12 @@ func (p *DNSPodV3Provider) SetRecordStatus(domain, recordID string, status strin
 	if err := ValidateDomainName(domain); err != nil {
 		return fmt.Errorf("域名验证失败: %v", err)
 	}
-	
+
 	// 验证状态参数
 	if status != "ENABLE" && status != "DISABLE" {
 		return fmt.Errorf("无效的记录状态: %s，应为ENABLE或DISABLE", status)
 	}
-	
+
 	// 将recordID从string转换为uint64
 	recordId, err := SafeStringToUint64(recordID)
 	if err != nil {
@@ -717,11 +717,11 @@ func (p *DNSPodV3Provider) GetDomainInfo(domain string) (map[string]interface{},
 				Message string `json:"Message"`
 			} `json:"Error,omitempty"`
 			RequestId string `json:"RequestId"`
-			
+
 			DomainInfo DomainInfo `json:"DomainInfo,omitempty"`
 		} `json:"Response"`
 	}
-	
+
 	if err := p.makeRequest("DescribeDomain", params, &resp); err != nil {
 		return nil, err
 	}
@@ -736,11 +736,11 @@ func (p *DNSPodV3Provider) BatchCreateRecords(domain string, records []CreateRec
 	if err := ValidateDomainName(domain); err != nil {
 		return nil, fmt.Errorf("域名验证失败: %v", err)
 	}
-	
+
 	if len(records) == 0 {
 		return nil, fmt.Errorf("记录列表不能为空")
 	}
-	
+
 	if len(records) > 20 { // 限制批量操作的数量
 		return nil, fmt.Errorf("批量创建记录数量不能超过20条")
 	}
@@ -751,26 +751,26 @@ func (p *DNSPodV3Provider) BatchCreateRecords(domain string, records []CreateRec
 	// 逐个创建记录（DNSPod API v3暂不支持真正的批量操作）
 	for i, record := range records {
 		// 验证每个记录的参数
-		if err := ValidateCreateRecordParams(domain, record.SubDomain, record.RecordType, record.Value, 
+		if err := ValidateCreateRecordParams(domain, record.SubDomain, record.RecordType, record.Value,
 			SafeUint64ToInt(*record.TTL)); err != nil {
 			errors = append(errors, fmt.Sprintf("记录%d: %v", i+1, err))
 			continue
 		}
-		
+
 		// 创建记录
-		recordId, err := p.CreateRecord(domain, record.SubDomain, record.RecordType, record.Value, 
+		recordId, err := p.CreateRecord(domain, record.SubDomain, record.RecordType, record.Value,
 			SafeUint64ToInt(*record.TTL))
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("记录%d创建失败: %v", i+1, err))
 			continue
 		}
-		
+
 		recordIds = append(recordIds, recordId)
 	}
 
 	// 如果有错误，返回部分成功的结果和错误信息
 	if len(errors) > 0 {
-		return recordIds, fmt.Errorf("部分记录创建失败: %s", 
+		return recordIds, fmt.Errorf("部分记录创建失败: %s",
 			fmt.Sprintf("[%s]", fmt.Sprintf("%v", errors)))
 	}
 

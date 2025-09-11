@@ -11,6 +11,7 @@ const Login = () => {
     try {
       await login(values.email, values.password)
       message.success('登录成功')
+      // 登录逻辑会自动处理重定向
     } catch (error: any) {
       message.error(error.response?.data?.error || '登录失败')
     }
@@ -82,8 +83,13 @@ const Login = () => {
         </Form>
 
         <div style={{ textAlign: 'center' }}>
-          <span>还没有账户？ </span>
-          <Link to="/register">立即注册</Link>
+          <div style={{ marginBottom: '8px' }}>
+            <Link to="/forgot-password">忘记密码？</Link>
+          </div>
+          <div>
+            <span>还没有账户？ </span>
+            <Link to="/register">立即注册</Link>
+          </div>
         </div>
       </Card>
     </div>

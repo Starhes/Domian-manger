@@ -17,12 +17,13 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres
+      # 必须修改：使用强密码（生产环境至少8位）
       - DB_PASSWORD=your_secure_password_here
       - DB_NAME=domain_manager
       - DB_TYPE=postgres
 
-      # JWT密钥 (生产环境请使用更安全的密钥)
-      - JWT_SECRET=your_jwt_secret_key_change_this_in_production
+      # 必须修改：JWT密钥（至少32位字符，建议64位以上）
+      - JWT_SECRET=your_jwt_secret_key_change_this_in_production_at_least_32_characters
 
       # 邮件配置 (可选)
       - SMTP_HOST=smtp.gmail.com
@@ -59,6 +60,7 @@ services:
     environment:
       - POSTGRES_DB=domain_manager
       - POSTGRES_USER=postgres
+      # 必须与应用的DB_PASSWORD保持一致
       - POSTGRES_PASSWORD=your_secure_password_here
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
     volumes:

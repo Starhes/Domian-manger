@@ -93,7 +93,6 @@ func (s *AdminService) UpdateUser(userID uint, updates map[string]interface{}) (
 		user.IsAdmin = isAdmin
 	}
 
-
 	if err := s.db.Save(&user).Error; err != nil {
 		return nil, errors.New("用户更新失败")
 	}

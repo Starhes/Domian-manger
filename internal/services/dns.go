@@ -36,9 +36,21 @@ func (s *DNSService) CreateDNSRecord(userID uint, req models.CreateDNSRecordRequ
 
 	// 检查子域名是否已被占用
 	var existingRecord models.DNSRecord
-	if err := s.db.Where("domain_id = ? AND subdomain = ? AND type = ?", 
+	if err := s.db.Where("domain_id = ? AND subdomain = ? AND type = ?",
 		req.DomainID, req.Subdomain, req.Type).First(&existingRecord).Error; err == nil {
 		return nil, errors.New("该子域名记录已存在")
+	}
+
+	// 检查用户DNS记录配额
+	var user models.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, errors.New("用户不存在")
+	}
+
+	var recordCount int64
+	s.db.Model(&models.DNSRecord{}).Where("user_id = ?", userID).Count(&recordCount)
+	if int(recordCount) >= user.DNSRecordQuota && user.DNSRecordQuota > 0 {
+		return nil, fmt.Errorf("DNS记录数量已达到配额上限(%d)", user.DNSRecordQuota)
 	}
 
 	// 创建DNS记录
@@ -49,10 +61,16 @@ func (s *DNSService) CreateDNSRecord(userID uint, req models.CreateDNSRecordRequ
 		Type:      req.Type,
 		Value:     req.Value,
 		TTL:       req.TTL,
+		Status:    "active",
 	}
 
 	if record.TTL == 0 {
 		record.TTL = 600 // 默认TTL
+	}
+
+	// 验证DNS记录数据
+	if err := record.ValidateDNSRecord(); err != nil {
+		return nil, fmt.Errorf("DNS记录验证失败: %v", err)
 	}
 
 	// 调用DNS服务商API创建记录
