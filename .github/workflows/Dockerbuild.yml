@@ -10,6 +10,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   # 缓存镜像名，统一放在 ghcr.io，方便跨 runner 复用
   CACHE_IMAGE: ghcr.io/${{ github.repository }}:build-cache
+  RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
 
 jobs:
   build-and-push:
@@ -69,5 +70,5 @@ jobs:
 
       # 可选：Render Deploy Hook（与缓存无关，保留原功能）
       - name: Trigger Render Deploy Hook
-        if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
+        if: env.RENDER_DEPLOY_HOOK != ''
         run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
