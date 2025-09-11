@@ -6,16 +6,17 @@ FROM node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 # 复制前端依赖文件
-COPY frontend/package.json ./
+COPY frontend/package.json frontend/package-lock.json* ./
 
 # 安装前端依赖（包括构建工具）
-RUN npm install
+RUN npm ci --only=production=false
 
-# 解决权限问题
-RUN chmod -R +x /app/frontend/node_modules/.bin
+# 复制前端源码（排除node_modules）
+COPY frontend/src ./src
+COPY frontend/index.html frontend/tsconfig.json frontend/tsconfig.node.json frontend/vite.config.ts ./
 
-# 复制前端源码
-COPY frontend/ ./
+# 确保node_modules/.bin中的可执行文件有正确权限
+RUN chmod -R +x node_modules/.bin/
 
 # 构建前端（显示详细输出）
 RUN npx tsc && npx vite build --verbose
