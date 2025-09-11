@@ -1,514 +1,262 @@
-# 部署指南
+# Domain MAX - 部署与运维指南
 
-本文档详细介绍了域名管理系统的部署方法和配置选项。
+本文档为 **Domain MAX** 系统提供了全面的部署、配置、运维及故障排查指导。
 
-## 📋 部署前准备
+## 目录
 
-### 系统要求
-- **操作系统**: Linux (推荐 Ubuntu 20.04+, CentOS 8+)
-- **内存**: 最低 2GB，推荐 4GB+
-- **存储**: 最低 10GB 可用空间
-- **网络**: 需要访问外网进行DNS API调用
+- [环境准备](#-环境准备)
+- [快速部署 (Docker Compose)](#-快速部署-docker-compose)
+- [从源码构建与部署](#-从源码构建与部署)
+- [生产环境最佳实践](#-生产环境最佳实践)
+  - [使用 Nginx 进行反向代理](#1-使用-nginx-进行反向代理)
+  - [配置 HTTPS](#2-配置-https)
+  - [安全加固](#3-安全加固)
+- [数据备份与恢复](#-数据备份与恢复)
+- [系统监控与日志](#-系统监控与日志)
+- [故障排查](#-故障排查)
 
-### 软件依赖
-- Docker 20.10+
-- Docker Compose 2.0+
-- Git (用于克隆代码)
+---
 
-### 安装Docker (Ubuntu)
+## 📋 环境准备
+
+在开始部署之前，请确保您的服务器满足以下条件：
+
+- **操作系统**: 推荐使用主流 Linux 发行版 (如 Ubuntu 20.04+, CentOS 8+)。
+- **硬件**: 至少 2GB RAM 和 10GB 磁盘空间。
+- **软件**:
+  - [Git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
+  - [Docker](https://docs.docker.com/engine/install/) (v20.10+)
+  - [Docker Compose](https://docs.docker.com/compose/install/) (v2.0+)
+
+**Docker 与 Docker Compose 安装 (以 Ubuntu 为例):**
+
 ```bash
-# 更新包索引
-sudo apt update
+# 更新系统包
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
 
-# 安装依赖
-sudo apt install apt-transport-https ca-certificates curl gnupg lsb-release
+# 添加 Docker 的官方 GPG 密钥
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-# 添加Docker官方GPG密钥
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+# 设置 Docker 仓库
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-# 添加Docker仓库
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# 安装 Docker
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# 安装Docker
-sudo apt update
-sudo apt install docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# 启动Docker服务
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# 添加用户到docker组
-sudo usermod -aG docker $USER
+# 启动并设置开机自启
+sudo systemctl enable --now docker
 ```
 
-## 🚀 标准部署
+## 🚀 快速部署 (Docker Compose)
 
-### 1. 获取源码
+这是最推荐的部署方式，适用于绝大多数场景。
+
+1.  **克隆项目代码**
+
+    ```bash
+    git clone https://github.com/Domain-MAX/Domain-MAX.git
+    cd Domain-MAX
+    ```
+
+2.  **创建并配置 `.env` 文件**
+
+    ```bash
+    cp env.example .env
+    nano .env
+    ```
+
+    在编辑器中，**务必修改** `DB_PASSWORD` 和 `JWT_SECRET` 的值，并根据需要配置 `SMTP` 相关参数用于邮件发送。
+
+3.  **启动服务**
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    该命令会在后台构建并启动应用容器和数据库容器。
+
+4.  **验证部署**
+    - 访问 `http://<your-server-ip>:8080` 查看系统主页。
+    - 默认管理员账户: `admin@example.com` / `admin123`
+
+## 🏗️ 从源码构建与部署
+
+如果您希望自行构建或对代码进行二次开发，可以按照以下步骤操作。
+
+### 1. 构建前端
+
 ```bash
-git clone <repository-url>
-cd domain-manager
+cd frontend
+npm install
+npm run build
 ```
 
-### 2. 环境配置
-```bash
-# 复制环境变量模板
-cp env.example .env
+构建产物将生成在 `frontend/dist` 目录下。
 
-# 编辑配置文件
-nano .env
+### 2. 构建后端
+
+```bash
+# 确保 Go 版本 >= 1.21
+go mod tidy
+go build -o domain-max-server main.go
 ```
 
-### 3. 关键配置项
-```bash
-# 数据库配置 - 必须修改
-DB_PASSWORD=your_very_secure_password_here
+这将生成一个名为 `domain-max-server` 的二进制可执行文件。
 
-# JWT密钥 - 必须修改
-JWT_SECRET=your_jwt_secret_key_at_least_32_characters_long
+### 3. 运行
 
-# 邮件配置 - 可选但推荐
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
-SMTP_FROM=noreply@yourdomain.com
-```
+1.  **准备配置文件**: 将 `.env` 文件放置在 `domain-max-server` 同级目录下。
+2.  **准备静态文件**: 将 `frontend/dist` 目录整体复制到 `domain-max-server` 同级目录下。
+3.  **启动数据库**: 您需要自行准备一个 PostgreSQL 或 MySQL 数据库，并在 `.env` 中配置正确的连接信息。
+4.  **启动服务**:
+    ```bash
+    ./domain-max-server
+    ```
 
-### 4. 启动服务
-```bash
-# 构建并启动所有服务
-docker-compose up -d
+## 🛡️ 生产环境最佳实践
 
-# 查看服务状态
-docker-compose ps
+### 1. 使用 Nginx 进行反向代理
 
-# 查看日志
-docker-compose logs -f
-```
+在生产环境中，强烈建议使用 Nginx 作为反向代理。这可以帮助您轻松实现 HTTPS、负载均衡和静态资源缓存。
 
-### 5. 验证部署
-```bash
-# 检查健康状态
-curl http://localhost:8080/api/health
-
-# 预期响应
-{"status":"ok","message":"服务运行正常"}
-```
-
-## 🔧 生产环境部署
-
-### 1. 反向代理配置 (Nginx)
-
-创建 Nginx 配置文件 `/etc/nginx/sites-available/domain-manager`:
+**Nginx 配置示例 (`/etc/nginx/sites-available/domain-max.conf`):**
 
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com;
-    return 301 https://$server_name$request_uri;
+    server_name your.domain.com; # 替换为您的域名
+
+    # 将所有 HTTP 请求重定向到 HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
 }
 
 server {
     listen 443 ssl http2;
-    server_name your-domain.com;
+    server_name your.domain.com; # 替换为您的域名
 
-    # SSL证书配置
-    ssl_certificate /path/to/your/certificate.crt;
-    ssl_certificate_key /path/to/your/private.key;
+    # SSL 证书配置 (请替换为您的证书路径)
+    ssl_certificate /path/to/your/fullchain.pem;
+    ssl_certificate_key /path/to/your/privkey.pem;
+
+    # 推荐的 SSL 安全配置
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
     ssl_prefer_server_ciphers off;
+    ssl_ciphers "EECDH+AESGCM:EDH+AESGCM:AES256+EECDH:AES256+EDH";
 
-    # 安全头
+    # 安全 Headers
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
-    add_header X-XSS-Protection "1; mode=block";
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # 代理到应用
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8080; # 代理到在本机运行的应用
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # WebSocket支持
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
-        # 超时设置
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-
-    # 静态文件缓存
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
-        proxy_pass http://127.0.0.1:8080;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
     }
 }
 ```
 
-启用配置:
-```bash
-sudo ln -s /etc/nginx/sites-available/domain-manager /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### 2. 防火墙配置
-```bash
-# 允许HTTP和HTTPS
-sudo ufw allow 80
-sudo ufw allow 443
-
-# 如果需要直接访问应用端口 (不推荐生产环境)
-sudo ufw allow 8080
-
-# 启用防火墙
-sudo ufw enable
-```
-
-### 3. 生产环境Docker Compose
-
-创建 `docker-compose.prod.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "127.0.0.1:8080:8080"  # 只绑定到本地
-    environment:
-      - PORT=8080
-      - ENVIRONMENT=production
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=domain_manager
-      - DB_TYPE=postgres
-      - JWT_SECRET=${JWT_SECRET}
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_FROM=${SMTP_FROM}
-    depends_on:
-      - db
-    restart: unless-stopped
-    networks:
-      - domain-manager-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-
-  db:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_DB=domain_manager
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./backups:/backups  # 备份目录
-    restart: unless-stopped
-    networks:
-      - domain-manager-network
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-        reservations:
-          memory: 512M
-
-networks:
-  domain-manager-network:
-    driver: bridge
-
-volumes:
-  postgres_data:
-    driver: local
-```
-
-启动生产环境:
-```bash
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-## 🔐 安全加固
-
-### 1. 系统安全
-```bash
-# 更新系统
-sudo apt update && sudo apt upgrade -y
-
-# 安装fail2ban
-sudo apt install fail2ban
-
-# 配置SSH (如果使用)
-sudo nano /etc/ssh/sshd_config
-# 设置: PermitRootLogin no, PasswordAuthentication no
-
-# 重启SSH服务
-sudo systemctl restart sshd
-```
-
-### 2. Docker安全
-```bash
-# 限制Docker daemon访问
-sudo chmod 660 /var/run/docker.sock
-
-# 使用非root用户运行容器 (已在Dockerfile中配置)
-
-# 定期更新镜像
-docker-compose pull
-docker-compose up -d
-```
-
-### 3. 数据库安全
-```bash
-# 进入数据库容器
-docker-compose exec db psql -U postgres domain_manager
-
-# 创建应用专用数据库用户
-CREATE USER app_user WITH PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE domain_manager TO app_user;
-GRANT USAGE ON SCHEMA public TO app_user;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO app_user;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_user;
-```
-
-## 📊 监控和日志
-
-### 1. 日志管理
-```bash
-# 配置日志轮转
-sudo nano /etc/docker/daemon.json
-```
-
-```json
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-```
+**启用配置:**
 
 ```bash
-sudo systemctl restart docker
+sudo ln -s /etc/nginx/sites-available/domain-max.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
-### 2. 监控脚本
+### 2. 配置 HTTPS
 
-创建 `monitor.sh`:
+推荐使用 [Let's Encrypt](https://letsencrypt.org/) 和 `certbot` 免费获取和自动续订 SSL 证书。
+
 ```bash
-#!/bin/bash
-
-# 检查服务状态
-check_service() {
-    if docker-compose ps | grep -q "Up"; then
-        echo "✅ 服务运行正常"
-    else
-        echo "❌ 服务异常"
-        docker-compose ps
-    fi
-}
-
-# 检查健康状态
-check_health() {
-    response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/health)
-    if [ "$response" = "200" ]; then
-        echo "✅ 应用健康检查通过"
-    else
-        echo "❌ 应用健康检查失败: $response"
-    fi
-}
-
-# 检查磁盘空间
-check_disk() {
-    usage=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
-    if [ "$usage" -lt 80 ]; then
-        echo "✅ 磁盘空间充足: ${usage}%"
-    else
-        echo "⚠️  磁盘空间不足: ${usage}%"
-    fi
-}
-
-echo "=== 系统监控报告 $(date) ==="
-check_service
-check_health
-check_disk
-echo "================================"
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your.domain.com
 ```
 
-设置定时检查:
-```bash
-chmod +x monitor.sh
+### 3. 安全加固
 
-# 添加到crontab (每5分钟检查一次)
-echo "*/5 * * * * /path/to/monitor.sh >> /var/log/domain-manager-monitor.log 2>&1" | crontab -
+- **数据库**: 在 `.env` 中为数据库设置强密码。在生产环境中，不建议将数据库端口 `5432` 暴露到公网，`docker-compose.yml` 默认配置已遵循此实践。
+- **防火墙 (UFW)**: 只开放必要的端口。
+  ```bash
+  sudo ufw allow ssh     # 22端口
+  sudo ufw allow http    # 80端口
+  sudo ufw allow https   # 443端口
+  sudo ufw enable
+  ```
+- **定期更新**: 定期拉取最新的代码和基础镜像，并重新构建部署，以获取安全更新。
+  ```bash
+  git pull
+  docker-compose pull
+  docker-compose up -d --build
+  ```
+
+## 💾 数据备份与恢复
+
+### 备份
+
+使用 `docker-compose exec` 命令可以轻松备份 PostgreSQL 数据库。
+
+```bash
+# 创建一个存放备份的目录
+mkdir -p backups
+
+# 执行备份命令
+docker-compose exec -T db pg_dump -U postgres domain_manager | gzip > backups/backup_$(date +%Y%m%d_%H%M%S).sql.gz
 ```
 
-## 💾 备份和恢复
+建议使用 `cron` 设置定时任务，实现自动化备份。
 
-### 1. 自动备份脚本
+### 恢复
 
-创建 `backup.sh`:
 ```bash
-#!/bin/bash
-
-BACKUP_DIR="/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-DB_CONTAINER="domain-manager_db_1"
-
-# 创建备份目录
-mkdir -p $BACKUP_DIR
-
-# 数据库备份
-docker exec $DB_CONTAINER pg_dump -U postgres domain_manager | gzip > $BACKUP_DIR/db_backup_$DATE.sql.gz
-
-# 保留最近7天的备份
-find $BACKUP_DIR -name "db_backup_*.sql.gz" -mtime +7 -delete
-
-echo "备份完成: db_backup_$DATE.sql.gz"
-```
-
-设置每日备份:
-```bash
-chmod +x backup.sh
-echo "0 2 * * * /path/to/backup.sh" | crontab -
-```
-
-### 2. 恢复数据
-```bash
-# 停止应用服务
+# 停止应用服务以避免数据写入
 docker-compose stop app
 
-# 恢复数据库
-gunzip -c /backups/db_backup_YYYYMMDD_HHMMSS.sql.gz | docker-compose exec -T db psql -U postgres domain_manager
+# 将备份文件恢复到数据库容器
+gunzip < backups/your_backup_file.sql.gz | docker-compose exec -T db psql -U postgres -d domain_manager
 
-# 重启服务
-docker-compose up -d
+# 重启应用服务
+docker-compose start app
 ```
 
-## 🔄 更新部署
+## 📊 系统监控与日志
 
-### 1. 应用更新
+### 查看日志
+
 ```bash
-# 拉取最新代码
-git pull origin main
+# 查看应用和数据库的实时日志
+docker-compose logs -f
 
-# 重新构建并部署
-docker-compose up -d --build
-
-# 清理无用镜像
-docker image prune -f
+# 只查看应用服务的日志
+docker-compose logs -f app
 ```
 
-### 2. 零停机更新 (使用多实例)
+### 健康检查
 
-创建 `docker-compose.ha.yml` 支持多实例:
-```yaml
-version: '3.8'
+系统提供了一个健康检查端点，可以用于监控服务的可用性。
 
-services:
-  app1:
-    # ... 配置同上
-    ports:
-      - "8081:8080"
-  
-  app2:
-    # ... 配置同上  
-    ports:
-      - "8082:8080"
-      
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-    depends_on:
-      - app1
-      - app2
-```
+- **URL**: `/api/health`
+- **命令**: `curl http://localhost:8080/api/health`
+- **成功响应**: `{"status":"ok","message":"服务运行正常"}`
 
 ## 🆘 故障排查
 
-### 常见问题
-
-1. **容器启动失败**
-   ```bash
-   # 查看详细日志
-   docker-compose logs app
-   
-   # 检查配置文件
-   docker-compose config
-   ```
-
-2. **数据库连接失败**
-   ```bash
-   # 检查数据库状态
-   docker-compose exec db pg_isready -U postgres
-   
-   # 查看数据库日志
-   docker-compose logs db
-   ```
-
-3. **DNS API调用失败**
-   ```bash
-   # 检查网络连接
-   docker-compose exec app ping dnsapi.cn
-   
-   # 验证API凭证
-   # 登录管理后台检查DNS服务商配置
-   ```
-
-4. **内存不足**
-   ```bash
-   # 查看容器资源使用
-   docker stats
-   
-   # 增加swap空间
-   sudo fallocate -l 2G /swapfile
-   sudo chmod 600 /swapfile
-   sudo mkswap /swapfile
-   sudo swapon /swapfile
-   ```
-
-### 紧急恢复
-
-如果系统完全不可用:
-```bash
-# 1. 停止所有服务
-docker-compose down
-
-# 2. 备份当前数据
-docker run --rm -v domain-manager_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/emergency_backup.tar.gz /data
-
-# 3. 重新部署
-docker-compose up -d --force-recreate
-
-# 4. 如需恢复数据
-docker run --rm -v domain-manager_postgres_data:/data -v $(pwd):/backup alpine tar xzf /backup/emergency_backup.tar.gz -C /
-```
-
----
-
-通过以上配置，您就可以在生产环境中安全、稳定地运行域名管理系统了。如有任何问题，请参考故障排查部分或联系技术支持。
+- **容器未启动**:
+  - 运行 `docker-compose logs app` 查看应用日志，排查错误原因。
+  - 检查 `.env` 文件中的配置项是否正确，特别是数据库密码。
+- **数据库连接失败**:
+  - 运行 `docker-compose logs db` 查看数据库日志。
+  - 确保 `app` 容器和 `db` 容器在同一个 Docker 网络中。
+- **Nginx 502 Bad Gateway**:
+  - 检查应用服务是否正常运行 `docker-compose ps`。
+  - 确认 Nginx 配置中的 `proxy_pass` 地址 (`127.0.0.1:8080`) 是否正确。
