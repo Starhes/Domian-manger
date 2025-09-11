@@ -81,8 +81,8 @@ func (s *AuthService) Login(req models.LoginRequest) (*models.LoginResponse, err
 		return nil, errors.New("邮箱或密码错误")
 	}
 
-	// 检查账户是否激活
-	if !user.IsActive {
+	// 检查账户是否激活（管理员账号无需验证）
+	if !user.IsActive && !user.IsAdmin {
 		return nil, errors.New("账户未激活，请检查邮箱验证链接")
 	}
 
