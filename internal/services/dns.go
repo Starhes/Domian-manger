@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"golang.org/x/net/publicsuffix"
 	"gorm.io/gorm"
 )
 
@@ -217,16 +218,43 @@ func (s *DNSService) SyncDomains() error {
 
 // classifyDomain 根据域名名称判断其类型
 func classifyDomain(domainName string) string {
-	parts := strings.Split(domainName, ".")
-	switch len(parts) {
-	case 2:
-		return "二级域名"
-	case 3:
-		return "三级域名"
-	default:
-		if len(parts) > 3 {
+	// 使用公共后缀列表获取有效的顶级域名+1
+	eTLDPlusOne, err := publicsuffix.EffectiveTLDPlusOne(domainName)
+	if err != nil {
+		// 对于无效的域名（例如没有点的裸域名），回退到简单分割
+		if !strings.Contains(domainName, ".") {
+			return "无法识别"
+		}
+		parts := strings.Split(domainName, ".")
+		switch len(parts) {
+		case 2:
+			return "二级域名"
+		case 3:
+			return "三级域名"
+		default:
 			return "多级域名"
 		}
-		return "未知类型"
 	}
+
+	// 如果域名本身就是eTLD+1，那么它就是二级域名
+	if domainName == eTLDPlusOne {
+		return "二级域名"
+	}
+
+	// 检查是否是eTLD+1的子域名
+	if strings.HasSuffix(domainName, "."+eTLDPlusOne) {
+		prefix := strings.TrimSuffix(domainName, "."+eTLDPlusOne)
+		// 计算前缀中的点数来确定级别
+		dots := strings.Count(prefix, ".")
+		switch dots {
+		case 0:
+			return "三级域名" // a.example.com
+		case 1:
+			return "四级域名" // a.b.example.com
+		default:
+			return "多级域名"
+		}
+	}
+
+	return "未知类型"
 }

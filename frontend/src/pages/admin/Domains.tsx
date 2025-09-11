@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
-import { 
-  Table, 
-  Button, 
-  Modal, 
-  Form, 
-  Input, 
-  Switch, 
-  Space, 
-  Popconfirm, 
+import {
+  Table,
+  Button,
+  Modal,
+  Form,
+  Input,
+  Switch,
+  Space,
+  Popconfirm,
   message,
   Typography,
   Tag,
   Card
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons'
 import api from '../../utils/api'
 
 const { Title } = Typography
@@ -22,6 +22,7 @@ interface Domain {
   id: number
   name: string
   is_active: boolean
+  domain_type: string
   created_at: string
 }
 
@@ -31,6 +32,7 @@ const AdminDomains = () => {
   const [modalVisible, setModalVisible] = useState(false)
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null)
   const [form] = Form.useForm()
+  const [syncLoading, setSyncLoading] = useState(false)
 
   useEffect(() => {
     fetchDomains()
@@ -74,6 +76,19 @@ const AdminDomains = () => {
     }
   }
 
+  const handleSync = async () => {
+    setSyncLoading(true)
+    try {
+      await api.post('/api/admin/domains/sync')
+      message.success('域名同步成功')
+      fetchDomains()
+    } catch (error: any) {
+      message.error(error.response?.data?.error || '同步失败')
+    } finally {
+      setSyncLoading(false)
+    }
+  }
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingDomain) {
@@ -104,6 +119,22 @@ const AdminDomains = () => {
       render: (name: string) => (
         <strong>{name}</strong>
       ),
+    },
+    {
+      title: '域名类型',
+      dataIndex: 'domain_type',
+      key: 'domain_type',
+      render: (type: string) => {
+        let color = 'default'
+        if (type === '二级域名') {
+          color = 'success'
+        } else if (type === '三级域名') {
+          color = 'processing'
+        } else if (type === '多级域名') {
+          color = 'warning'
+        }
+        return <Tag color={color}>{type}</Tag>
+      },
     },
     {
       title: '状态',
@@ -155,22 +186,31 @@ const AdminDomains = () => {
 
   return (
     <div>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24 
+        marginBottom: 24
       }}>
         <Title level={2} style={{ margin: 0 }}>
           域名管理
         </Title>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />}
-          onClick={handleCreate}
-        >
-          添加域名
-        </Button>
+        <Space>
+          <Button
+            icon={<SyncOutlined />}
+            onClick={handleSync}
+            loading={syncLoading}
+          >
+            同步域名
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            添加域名
+          </Button>
+        </Space>
       </div>
 
       <Card>
@@ -207,14 +247,14 @@ const AdminDomains = () => {
             label="域名"
             rules={[
               { required: true, message: '请输入域名' },
-              { 
+              {
                 pattern: /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/,
                 message: '请输入有效的域名格式'
               }
             ]}
           >
-            <Input 
-              placeholder="例如: example.com" 
+            <Input
+              placeholder="例如: example.com"
               disabled={!!editingDomain}
             />
           </Form.Item>
