@@ -59,7 +59,7 @@ git clone https://github.com/Domain-MAX/Domain-MAX.git
 cd Domain-MAX
 
 # 2. 生成安全配置
-go run scripts/generate-config.go
+go run scripts/generate_config.go
 
 # 3. 一键启动
 docker-compose up -d

@@ -34,7 +34,7 @@ git clone https://github.com/Domain-MAX/Domain-MAX.git
 cd Domain-MAX
 
 # 2. 生成安全配置（自动生成强密码和密钥）
-go run scripts/generate-config.go
+go run scripts/generate_config.go
 
 # 3. 启动服务
 docker-compose up -d
@@ -98,7 +98,7 @@ sudo apt-get install docker-compose-plugin
 
    ```bash
    # 自动生成包含强密码和随机密钥的 .env 文件
-   go run scripts/generate-config.go
+   go run scripts/generate_config.go
 
    # 或手动配置（高级用户）
    cp env.example .env
@@ -188,7 +188,7 @@ curl http://localhost:8080/api/health
    cd Domain-MAX
 
    # 生成配置文件
-   go run scripts/generate-config.go
+   go run scripts/generate_config.go
 
    # 根据实际环境调整 .env
    nano .env
@@ -517,7 +517,7 @@ docker-compose ps
 docker-compose logs app
 
 # 检查配置文件
-go run scripts/generate-config.go --validate
+go run scripts/generate_config.go --validate
 ```
 
 **2. 数据库问题**
