@@ -1,6 +1,7 @@
 package api
 
 import (
+	"domain-manager/internal/models"
 	"domain-manager/internal/services"
 	"net/http"
 	"strconv"
@@ -289,4 +290,156 @@ func (h *AdminHandler) SyncDomains(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "域名同步成功"})
+}
+
+// ========================= SMTP配置管理 =========================
+
+// 获取所有SMTP配置
+func (h *AdminHandler) GetSMTPConfigs(c *gin.Context) {
+	configs, err := h.adminService.GetSMTPConfigs()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取SMTP配置列表失败", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"configs": configs})
+}
+
+// 获取单个SMTP配置
+func (h *AdminHandler) GetSMTPConfig(c *gin.Context) {
+	configIDStr := c.Param("id")
+	configID, err := strconv.ParseUint(configIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的配置ID"})
+		return
+	}
+
+	config, err := h.adminService.GetSMTPConfig(uint(configID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"config": config})
+}
+
+// 创建SMTP配置
+func (h *AdminHandler) CreateSMTPConfig(c *gin.Context) {
+	var req models.CreateSMTPConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效", "details": err.Error()})
+		return
+	}
+
+	config, err := h.adminService.CreateSMTPConfig(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "SMTP配置创建成功",
+		"config":  config,
+	})
+}
+
+// 更新SMTP配置
+func (h *AdminHandler) UpdateSMTPConfig(c *gin.Context) {
+	configIDStr := c.Param("id")
+	configID, err := strconv.ParseUint(configIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的配置ID"})
+		return
+	}
+
+	var req models.UpdateSMTPConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效", "details": err.Error()})
+		return
+	}
+
+	config, err := h.adminService.UpdateSMTPConfig(uint(configID), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "SMTP配置更新成功",
+		"config":  config,
+	})
+}
+
+// 删除SMTP配置
+func (h *AdminHandler) DeleteSMTPConfig(c *gin.Context) {
+	configIDStr := c.Param("id")
+	configID, err := strconv.ParseUint(configIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的配置ID"})
+		return
+	}
+
+	if err := h.adminService.DeleteSMTPConfig(uint(configID)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "SMTP配置删除成功"})
+}
+
+// 激活SMTP配置
+func (h *AdminHandler) ActivateSMTPConfig(c *gin.Context) {
+	configIDStr := c.Param("id")
+	configID, err := strconv.ParseUint(configIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的配置ID"})
+		return
+	}
+
+	if err := h.adminService.ActivateSMTPConfig(uint(configID)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "SMTP配置激活成功"})
+}
+
+// 设置默认SMTP配置
+func (h *AdminHandler) SetDefaultSMTPConfig(c *gin.Context) {
+	configIDStr := c.Param("id")
+	configID, err := strconv.ParseUint(configIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的配置ID"})
+		return
+	}
+
+	if err := h.adminService.SetDefaultSMTPConfig(uint(configID)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "默认SMTP配置设置成功"})
+}
+
+// 测试SMTP配置
+func (h *AdminHandler) TestSMTPConfig(c *gin.Context) {
+	configIDStr := c.Param("id")
+	configID, err := strconv.ParseUint(configIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的配置ID"})
+		return
+	}
+
+	var req models.TestSMTPConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数无效", "details": err.Error()})
+		return
+	}
+
+	if err := h.adminService.TestSMTPConfig(uint(configID), req.ToEmail); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "SMTP测试失败", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "SMTP测试邮件发送成功"})
 }

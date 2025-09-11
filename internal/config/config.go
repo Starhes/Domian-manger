@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 
@@ -12,6 +13,7 @@ type Config struct {
 	// 服务器配置
 	Port        string
 	Environment string
+	BaseURL     string // 系统基础URL，用于生成邮件链接
 
 	// 数据库配置
 	DBHost     string
@@ -42,6 +44,7 @@ func Load() *Config {
 	cfg := &Config{
 		Port:        getEnv("PORT", "8080"),
 		Environment: getEnv("ENVIRONMENT", "development"),
+		BaseURL:     getEnv("BASE_URL", ""), // 为空时将自动检测
 
 		DBHost:     getEnv("DB_HOST", "localhost"),
 		DBPort:     getEnv("DB_PORT", "5432"),
@@ -59,6 +62,16 @@ func Load() *Config {
 		SMTPFrom:     getEnv("SMTP_FROM", "noreply@example.com"),
 
 		DNSPodToken: getEnv("DNSPOD_TOKEN", ""),
+	}
+
+	// 如果没有设置BASE_URL，根据环境和端口自动生成
+	if cfg.BaseURL == "" {
+		if cfg.Environment == "development" {
+			cfg.BaseURL = fmt.Sprintf("http://localhost:%s", cfg.Port)
+		} else {
+			// 生产环境默认使用HTTPS，域名需要用户配置
+			cfg.BaseURL = fmt.Sprintf("https://localhost:%s", cfg.Port)
+		}
 	}
 
 	// 验证必要的配置项

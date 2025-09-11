@@ -5,6 +5,7 @@ import api from '../utils/api'
 interface User {
   id: number
   email: string
+  nickname?: string
   is_active: boolean
   is_admin: boolean
   created_at: string
@@ -16,7 +17,7 @@ interface AuthState {
   isLoading: boolean
   redirectPath: string | null
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, confirmPassword: string, nickname?: string) => Promise<void>
   logout: () => void
   initAuth: () => void
   setRedirectPath: (path: string | null) => void
@@ -56,10 +57,20 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      register: async (email: string, password: string) => {
+      register: async (email: string, password: string, confirmPassword: string, nickname?: string) => {
         set({ isLoading: true })
         try {
-          await api.post('/api/register', { email, password })
+          const registerData: any = { 
+            email, 
+            password, 
+            confirm_password: confirmPassword 
+          }
+          
+          if (nickname) {
+            registerData.nickname = nickname
+          }
+          
+          await api.post('/api/register', registerData)
           set({ isLoading: false })
         } catch (error) {
           set({ isLoading: false })

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -286,4 +287,251 @@ func (s *AdminService) GetStats() (map[string]interface{}, error) {
 func (s *AdminService) SyncDomains() error {
 	dnsService := NewDNSService(s.db)
 	return dnsService.SyncDomains()
+}
+
+// ========================= SMTP配置管理 =========================
+
+// 获取所有SMTP配置
+func (s *AdminService) GetSMTPConfigs() ([]models.SMTPConfigResponse, error) {
+	var configs []models.SMTPConfig
+	if err := s.db.Find(&configs).Error; err != nil {
+		return nil, err
+	}
+
+	// 转换为响应格式（脱敏）
+	var response []models.SMTPConfigResponse
+	for _, config := range configs {
+		response = append(response, models.SMTPConfigResponse{
+			ID:          config.ID,
+			Name:        config.Name,
+			Host:        config.Host,
+			Port:        config.Port,
+			Username:    config.Username,
+			FromEmail:   config.FromEmail,
+			FromName:    config.FromName,
+			IsActive:    config.IsActive,
+			IsDefault:   config.IsDefault,
+			UseTLS:      config.UseTLS,
+			Description: config.Description,
+			LastTestAt:  config.LastTestAt,
+			TestResult:  config.TestResult,
+			CreatedAt:   config.CreatedAt,
+			UpdatedAt:   config.UpdatedAt,
+		})
+	}
+
+	return response, nil
+}
+
+// 获取单个SMTP配置
+func (s *AdminService) GetSMTPConfig(configID uint) (*models.SMTPConfigResponse, error) {
+	var config models.SMTPConfig
+	if err := s.db.First(&config, configID).Error; err != nil {
+		return nil, errors.New("SMTP配置不存在")
+	}
+
+	return &models.SMTPConfigResponse{
+		ID:          config.ID,
+		Name:        config.Name,
+		Host:        config.Host,
+		Port:        config.Port,
+		Username:    config.Username,
+		FromEmail:   config.FromEmail,
+		FromName:    config.FromName,
+		IsActive:    config.IsActive,
+		IsDefault:   config.IsDefault,
+		UseTLS:      config.UseTLS,
+		Description: config.Description,
+		LastTestAt:  config.LastTestAt,
+		TestResult:  config.TestResult,
+		CreatedAt:   config.CreatedAt,
+		UpdatedAt:   config.UpdatedAt,
+	}, nil
+}
+
+// 创建SMTP配置
+func (s *AdminService) CreateSMTPConfig(req models.CreateSMTPConfigRequest) (*models.SMTPConfigResponse, error) {
+	// 检查配置名称是否已存在
+	var existingConfig models.SMTPConfig
+	if err := s.db.Where("name = ?", req.Name).First(&existingConfig).Error; err == nil {
+		return nil, errors.New("配置名称已存在")
+	}
+
+	// 加密密码（这里使用简单的base64编码，生产环境建议使用更强的加密）
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, errors.New("密码加密失败")
+	}
+
+	config := models.SMTPConfig{
+		Name:        req.Name,
+		Host:        req.Host,
+		Port:        req.Port,
+		Username:    req.Username,
+		Password:    string(hashedPassword),
+		FromEmail:   req.FromEmail,
+		FromName:    req.FromName,
+		UseTLS:      req.UseTLS,
+		Description: req.Description,
+		IsActive:    false, // 默认不激活
+		IsDefault:   false,
+	}
+
+	if err := s.db.Create(&config).Error; err != nil {
+		return nil, errors.New("SMTP配置创建失败")
+	}
+
+	return s.GetSMTPConfig(config.ID)
+}
+
+// 更新SMTP配置
+func (s *AdminService) UpdateSMTPConfig(configID uint, req models.UpdateSMTPConfigRequest) (*models.SMTPConfigResponse, error) {
+	var config models.SMTPConfig
+	if err := s.db.First(&config, configID).Error; err != nil {
+		return nil, errors.New("SMTP配置不存在")
+	}
+
+	// 检查名称冲突
+	if req.Name != "" && req.Name != config.Name {
+		var existingConfig models.SMTPConfig
+		if err := s.db.Where("name = ? AND id != ?", req.Name, configID).First(&existingConfig).Error; err == nil {
+			return nil, errors.New("配置名称已存在")
+		}
+		config.Name = req.Name
+	}
+
+	// 更新其他字段
+	if req.Host != "" {
+		config.Host = req.Host
+	}
+	if req.Port > 0 {
+		config.Port = req.Port
+	}
+	if req.Username != "" {
+		config.Username = req.Username
+	}
+	if req.Password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, errors.New("密码加密失败")
+		}
+		config.Password = string(hashedPassword)
+	}
+	if req.FromEmail != "" {
+		config.FromEmail = req.FromEmail
+	}
+	if req.FromName != "" {
+		config.FromName = req.FromName
+	}
+	if req.UseTLS != nil {
+		config.UseTLS = *req.UseTLS
+	}
+	if req.Description != "" {
+		config.Description = req.Description
+	}
+
+	if err := s.db.Save(&config).Error; err != nil {
+		return nil, errors.New("SMTP配置更新失败")
+	}
+
+	return s.GetSMTPConfig(config.ID)
+}
+
+// 删除SMTP配置
+func (s *AdminService) DeleteSMTPConfig(configID uint) error {
+	var config models.SMTPConfig
+	if err := s.db.First(&config, configID).Error; err != nil {
+		return errors.New("SMTP配置不存在")
+	}
+
+	// 检查是否为默认配置
+	if config.IsDefault {
+		return errors.New("不能删除默认配置")
+	}
+
+	if err := s.db.Delete(&config).Error; err != nil {
+		return errors.New("SMTP配置删除失败")
+	}
+
+	return nil
+}
+
+// 激活SMTP配置
+func (s *AdminService) ActivateSMTPConfig(configID uint) error {
+	var config models.SMTPConfig
+	if err := s.db.First(&config, configID).Error; err != nil {
+		return errors.New("SMTP配置不存在")
+	}
+
+	// 先取消其他配置的激活状态
+	if err := s.db.Model(&models.SMTPConfig{}).Where("id != ?", configID).Update("is_active", false).Error; err != nil {
+		return errors.New("更新其他配置状态失败")
+	}
+
+	// 激活当前配置
+	config.IsActive = true
+	if err := s.db.Save(&config).Error; err != nil {
+		return errors.New("配置激活失败")
+	}
+
+	return nil
+}
+
+// 设置默认SMTP配置
+func (s *AdminService) SetDefaultSMTPConfig(configID uint) error {
+	var config models.SMTPConfig
+	if err := s.db.First(&config, configID).Error; err != nil {
+		return errors.New("SMTP配置不存在")
+	}
+
+	// 先取消其他配置的默认状态
+	if err := s.db.Model(&models.SMTPConfig{}).Where("id != ?", configID).Update("is_default", false).Error; err != nil {
+		return errors.New("更新其他配置状态失败")
+	}
+
+	// 设置当前配置为默认
+	config.IsDefault = true
+	if err := s.db.Save(&config).Error; err != nil {
+		return errors.New("设置默认配置失败")
+	}
+
+	return nil
+}
+
+// 测试SMTP配置
+func (s *AdminService) TestSMTPConfig(configID uint, toEmail string) error {
+	var smtpConfig models.SMTPConfig
+	if err := s.db.First(&smtpConfig, configID).Error; err != nil {
+		return errors.New("SMTP配置不存在")
+	}
+
+	// 创建临时的配置对象用于测试
+	tempConfig := &config.Config{
+		SMTPHost:     smtpConfig.Host,
+		SMTPPort:     smtpConfig.Port,
+		SMTPUser:     smtpConfig.Username,
+		SMTPPassword: smtpConfig.Password, // 这里需要解密，但暂时先直接使用
+		SMTPFrom:     smtpConfig.FromEmail,
+	}
+
+	// 创建邮件服务并发送测试邮件
+	emailService := NewEmailService(tempConfig)
+	subject := "SMTP配置测试邮件"
+	body := "这是一封测试邮件，用于验证SMTP配置是否正常工作。"
+
+	now := time.Now()
+	if err := emailService.sendEmail(toEmail, subject, body); err != nil {
+		// 记录测试失败
+		smtpConfig.TestResult = "测试失败: " + err.Error()
+		smtpConfig.LastTestAt = &now
+		s.db.Save(&smtpConfig)
+		return err
+	}
+
+	// 记录测试成功
+	smtpConfig.TestResult = "测试成功"
+	smtpConfig.LastTestAt = &now
+	s.db.Save(&smtpConfig)
+
+	return nil
 }

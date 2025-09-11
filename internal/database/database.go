@@ -43,5 +43,6 @@ func Migrate(db *gorm.DB) error {
 		&models.DNSProvider{},
 		&models.EmailVerification{},
 		&models.PasswordReset{},
+		&models.SMTPConfig{},
 	)
 }

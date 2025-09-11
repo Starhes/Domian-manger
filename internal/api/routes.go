@@ -82,5 +82,15 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 
 		// 系统统计
 		admin.GET("/stats", adminHandler.GetStats)
+
+		// SMTP配置管理
+		admin.GET("/smtp-configs", adminHandler.GetSMTPConfigs)
+		admin.GET("/smtp-configs/:id", adminHandler.GetSMTPConfig)
+		admin.POST("/smtp-configs", adminHandler.CreateSMTPConfig)
+		admin.PUT("/smtp-configs/:id", adminHandler.UpdateSMTPConfig)
+		admin.DELETE("/smtp-configs/:id", adminHandler.DeleteSMTPConfig)
+		admin.POST("/smtp-configs/:id/activate", adminHandler.ActivateSMTPConfig)
+		admin.POST("/smtp-configs/:id/set-default", adminHandler.SetDefaultSMTPConfig)
+		admin.POST("/smtp-configs/:id/test", adminHandler.TestSMTPConfig)
 	}
 }
