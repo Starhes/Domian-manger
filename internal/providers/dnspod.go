@@ -33,10 +33,7 @@ type DNSPodResponse struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"domain"`
-	Domains []struct {
-		ID   json.Number `json:"id"`
-		Name string      `json:"name"`
-	} `json:"domains"`
+	Domains []DNSPodDomainInfo `json:"domains"`
 	Record struct {
 		ID     string `json:"id"`
 		Name   string `json:"name"`

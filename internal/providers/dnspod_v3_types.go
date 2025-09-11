@@ -275,8 +275,8 @@ func SafeIntToUint64(i int) uint64 {
 // SafeUint64ToInt 安全地将uint64转换为int
 func SafeUint64ToInt(i uint64) int {
 	// 检查溢出
-	if i > uint64(^int(0)>>1) {
-		return int(^int(0)>>1) // 返回int最大值
+	if i > uint64(^uint(0)>>1) {
+		return int(^uint(0)>>1) // 返回int最大值
 	}
 	return int(i)
 }
