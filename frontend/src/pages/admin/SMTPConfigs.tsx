@@ -22,7 +22,7 @@ import {
   DeleteOutlined,
   CheckOutlined,
   StarOutlined,
-  TestTubeOutlined,
+  ExperimentOutlined,
   ExclamationCircleOutlined
 } from '@ant-design/icons'
 import api from '../../utils/api'
@@ -240,7 +240,7 @@ const SMTPConfigs = () => {
           
           <Button
             size="small"
-            icon={<TestTubeOutlined />}
+            icon={<ExperimentOutlined />}
             onClick={() => handleTest(record)}
           >
             测试
