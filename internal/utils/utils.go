@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"regexp"
@@ -845,33 +846,10 @@ func log2(x float64) float64 {
 	if x <= 0 {
 		return 0
 	}
-	// 使用换底公式: log2(x) = ln(x) / ln(2)
-	return 1.4426950408889634 * logApprox(x) // 1/ln(2) ≈ 1.4426950408889634
+	// 使用标准库的数学函数确保精度
+	return math.Log2(x)
 }
 
-// logApprox 自然对数的近似计算
-func logApprox(x float64) float64 {
-	if x <= 0 {
-		return 0
-	}
-	if x == 1 {
-		return 0
-	}
-	// 简单的对数近似，实际项目中可以使用 math.Log
-	// 这里为了避免引入额外依赖使用近似计算
-	result := 0.0
-	if x > 1 {
-		n := 0
-		for x > 2 {
-			x /= 2
-			n++
-		}
-		y := (x - 1) / (x + 1)
-		y2 := y * y
-		result = 2*y*(1 + y2/3 + y2*y2/5) + float64(n)*0.6931471805599453 // ln(2)
-	}
-	return result
-}
 
 // hasObviousPattern 检查是否有明显的模式
 func hasObviousPattern(s string) bool {
