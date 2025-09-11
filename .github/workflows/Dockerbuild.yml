@@ -1,32 +1,73 @@
 name: Docker Build & Push with Cache
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # 支持手动触发 [3][9]
+
 env:
   REGISTRY: ghcr.io
-  OWNER: ${{ github.repository_owner | lower }}  # 全局安全变量
+  RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}  # Hook地址隐藏保护
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        platform: [linux/amd64, linux/arm64]
+    permissions:
+      contents: read
+      packages: write
+    
     steps:
-      # 步骤1: 解析动态变量（关键！）
-      - name: Generate cache image name
+      # 步骤1: 安全生成小写镜像名称
+      - name: Generate safe image names
         run: |
+          OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2 | tr '[:upper:]' '[:lower:]')
-          echo "CACHE_IMAGE=ghcr.io/${{ env.OWNER }}/$REPO_NAME:build-cache-${{ matrix.platform }}" >> $GITHUB_ENV
-      
-      # 步骤2: 常规步骤 (略同原流程)
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      
-      # 步骤3: 构建推送（启用分平台缓存）
+          echo "IMAGE_NAME=$OWNER_LOWER/$REPO_NAME" >> $GITHUB_ENV
+          echo "CACHE_IMAGE=${{ env.REGISTRY }}/$OWNER_LOWER/$REPO_NAME:build-cache" >> $GITHUB_ENV
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 步骤2: Docker环境配置
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 步骤3: 动态生成镜像标签（含latest和唯一SHA标签）
+      - name: Generate Docker tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}  # 仅main分支生成latest [7][9]
+            type=sha,prefix=sha-,format=lower  # 永久唯一标签
+
+      # 步骤4: 构建并推送镜像（启用缓存加速）
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
-          platforms: ${{ matrix.platform }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.CACHE_IMAGE }}
-          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }},mode=max
+          cache-to: type=registry,ref=${{ env.CACHE_IMAGE }},mode=max  # 缓存复用加速 [3][5]
+
+      # 步骤5: 安全触发Render部署（隐藏hook地址）
+      - name: Trigger Render Deploy
+        if: env.RENDER_DEPLOY_HOOK != ''
+        env:
+          SECURE_HOOK: ${{ env.RENDER_DEPLOY_HOOK }}  # 通过环境变量二次保护
+        run: |
+          echo "触发安全部署流程..." 
+          curl -sfSX POST "$SECURE_HOOK"
