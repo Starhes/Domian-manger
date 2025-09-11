@@ -18,7 +18,7 @@ RUN chmod -R +x /app/frontend/node_modules/.bin
 COPY frontend/ ./
 
 # 构建前端（显示详细输出）
-RUN npm run build --verbose
+RUN npx tsc && npx vite build --verbose
 
 # 第二阶段：构建后端
 FROM golang:1.23-alpine AS backend-builder
