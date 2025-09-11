@@ -9,6 +9,7 @@ import {
   HomeOutlined
 } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
+import { useState } from 'react'
 
 const { Header, Sider, Content } = AntLayout
 
@@ -16,6 +17,7 @@ const AdminLayout = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useAuthStore()
+  const [collapsed, setCollapsed] = useState(false)
 
   const menuItems = [
     {
@@ -67,6 +69,12 @@ const AdminLayout = () => {
   return (
     <AntLayout>
       <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        breakpoint="lg"
+        collapsedWidth="0"
+        trigger={null}
         width={250}
         style={{
           overflow: 'auto',
@@ -75,6 +83,7 @@ const AdminLayout = () => {
           left: 0,
           top: 0,
           bottom: 0,
+          zIndex: 10,
         }}
       >
         <div style={{ 
@@ -89,7 +98,7 @@ const AdminLayout = () => {
           fontSize: 16,
           fontWeight: 'bold'
         }}>
-          管理后台
+          {collapsed ? '管理' : '管理后台'}
         </div>
         
         <Menu
@@ -101,7 +110,7 @@ const AdminLayout = () => {
         />
       </Sider>
       
-      <AntLayout style={{ marginLeft: 250 }}>
+      <AntLayout style={{ marginLeft: collapsed ? 0 : 250, transition: 'margin-left 0.2s' }}>
         <Header style={{ 
           padding: '0 24px', 
           background: '#fff',

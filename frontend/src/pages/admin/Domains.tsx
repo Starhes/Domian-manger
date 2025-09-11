@@ -185,6 +185,7 @@ const AdminDomains = () => {
             showQuickJumper: true,
             showTotal: (total) => `共 ${total} 个域名`,
           }}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 

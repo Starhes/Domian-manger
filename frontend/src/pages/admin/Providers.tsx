@@ -104,18 +104,18 @@ const AdminProviders = () => {
     switch (type) {
       case 'dnspod':
         return JSON.stringify({
-          token: "your_dnspod_token_here"
+          token: ""
         }, null, 2)
       case 'dnspod_v3':
         return JSON.stringify({
-          secret_id: "AKID********************************",
-          secret_key: "********************************",
-          region: "ap-guangzhou"
+          secret_id: "",
+          secret_key: "",
+          region: ""
         }, null, 2)
       case 'cloudflare':
         return JSON.stringify({
-          api_token: "your_cloudflare_api_token_here",
-          zone_id: "your_zone_id_here"
+          api_token: "",
+          zone_id: ""
         }, null, 2)
       default:
         return '{}'
@@ -235,6 +235,7 @@ const AdminProviders = () => {
             showQuickJumper: true,
             showTotal: (total) => `共 ${total} 个DNS服务商`,
           }}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 

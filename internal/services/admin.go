@@ -5,7 +5,9 @@ import (
 	"domain-manager/internal/models"
 	"encoding/json"
 	"errors"
+	"strings"
 
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -59,7 +61,40 @@ func (s *AdminService) UpdateUser(userID uint, updates map[string]interface{}) (
 		return nil, errors.New("用户不存在")
 	}
 
-	if err := s.db.Model(&user).Updates(updates).Error; err != nil {
+	// 处理邮箱更新
+	if email, ok := updates["email"].(string); ok && email != user.Email {
+		// 验证邮箱格式是否正确
+		// (简单验证，更复杂的验证可能需要正则表达式)
+		if !strings.Contains(email, "@") {
+			return nil, errors.New("邮箱格式不正确")
+		}
+		// 检查新邮箱是否已被占用
+		var existingUser models.User
+		if err := s.db.Where("email = ? AND id != ?", email, userID).First(&existingUser).Error; err == nil {
+			return nil, errors.New("该邮箱已被其他用户注册")
+		}
+		user.Email = email
+	}
+
+	// 处理密码更新
+	if password, ok := updates["password"].(string); ok && password != "" {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, errors.New("密码加密失败")
+		}
+		user.Password = string(hashedPassword)
+	}
+
+	// 处理其他字段的更新
+	if isActive, ok := updates["is_active"].(bool); ok {
+		user.IsActive = isActive
+	}
+	if isAdmin, ok := updates["is_admin"].(bool); ok {
+		user.IsAdmin = isAdmin
+	}
+
+
+	if err := s.db.Save(&user).Error; err != nil {
 		return nil, errors.New("用户更新失败")
 	}
 

@@ -91,8 +91,14 @@ const AdminUsers = () => {
   const handleSubmit = async (values: any) => {
     if (!editingUser) return
 
+    // 如果密码为空，则不提交该字段
+    const updateValues = { ...values };
+    if (!updateValues.password) {
+      delete updateValues.password;
+    }
+
     try {
-      await api.put(`/api/admin/users/${editingUser.id}`, values)
+      await api.put(`/api/admin/users/${editingUser.id}`, updateValues)
       message.success('用户更新成功')
       setModalVisible(false)
       fetchUsers()
@@ -217,6 +223,7 @@ const AdminUsers = () => {
               `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
           }}
           onChange={handleTableChange}
+          scroll={{ x: 'max-content' }}
         />
       </Card>
 
@@ -236,8 +243,20 @@ const AdminUsers = () => {
           <Form.Item
             name="email"
             label="邮箱地址"
+            rules={[
+              { required: true, message: '请输入邮箱' },
+              { type: 'email', message: '请输入有效的邮箱地址' }
+            ]}
           >
-            <Input disabled />
+            <Input />
+          </Form.Item>
+
+          <Form.Item
+            name="password"
+            label="新密码 (可选)"
+            rules={[{ min: 6, message: '密码至少6位' }]}
+          >
+            <Input.Password placeholder="留空则不修改密码" />
           </Form.Item>
 
           <Form.Item
