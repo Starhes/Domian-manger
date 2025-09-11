@@ -19,7 +19,7 @@ COPY frontend/index.html frontend/tsconfig.json frontend/tsconfig.node.json fron
 RUN chmod -R +x node_modules/.bin/
 
 # 构建前端（显示详细输出）
-RUN npx tsc && npx vite build --verbose
+RUN npx tsc && npx vite build --logLevel info
 
 # 第二阶段：构建后端
 FROM golang:1.23-alpine AS backend-builder
