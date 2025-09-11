@@ -11,6 +11,9 @@ COPY frontend/package.json ./
 # 安装前端依赖（包括构建工具）
 RUN npm install
 
+# 解决权限问题
+RUN chmod -R +x /app/frontend/node_modules/.bin
+
 # 复制前端源码
 COPY frontend/ ./
 
