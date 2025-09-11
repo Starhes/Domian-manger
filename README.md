@@ -2,11 +2,8 @@
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Domain-MAX/Domain-MAX)](https://golang.org/)
 [![License](https://img.shields.io/github/license/Domain-MAX/Domain-MAX)](LICENSE)
-[![Docker Build](https://github.com/Domain-MAX/Domain-MAX/actions/workflows/docker-build.yml/badge.svg)](https://github.com/Domain-MAX/Domain-MAX/actions/workflows/docker-build.yml)
 
 **Domain MAX** 是一个现代、高效的二级域名分发管理系统。采用前后端分离架构，基于 Go 和 React 构建，通过单一 Docker 镜像交付，为用户和管理员提供了强大而直观的域名及 DNS 记录管理功能。
-
-![系统截图](https://your-image-url.com/screenshot.png) <!-- 请替换为您的系统截图URL -->
 
 ---
 
