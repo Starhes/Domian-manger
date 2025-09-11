@@ -279,3 +279,14 @@ func (h *AdminHandler) GetStats(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"stats": stats})
 }
+
+// SyncDomains 同步域名
+func (h *AdminHandler) SyncDomains(c *gin.Context) {
+	err := h.adminService.SyncDomains()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "同步域名失败", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "域名同步成功"})
+}

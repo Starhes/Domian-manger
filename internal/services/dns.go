@@ -5,6 +5,7 @@ import (
 	"domain-manager/internal/providers"
 	"errors"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -169,4 +170,63 @@ func (s *DNSService) getDNSProvider() (providers.DNSProvider, error) {
 
 	// 使用新的provider工厂
 	return providers.NewDNSProvider(dnsProvider.Type, dnsProvider.Config)
+}
+
+// SyncDomains 同步DNS服务商的域名到数据库
+func (s *DNSService) SyncDomains() error {
+	provider, err := s.getDNSProvider()
+	if err != nil {
+		return fmt.Errorf("获取DNS服务商失败: %v", err)
+	}
+
+	externalDomains, err := provider.GetDomains()
+	if err != nil {
+		return fmt.Errorf("从服务商获取域名列表失败: %v", err)
+	}
+
+	for _, extDomain := range externalDomains {
+		var domain models.Domain
+		err := s.db.Where("name = ?", extDomain.Name).First(&domain).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			// 查询出错
+			continue
+		}
+
+		domainType := classifyDomain(extDomain.Name)
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// 域名不存在，创建新记录
+			newDomain := models.Domain{
+				Name:       extDomain.Name,
+				IsActive:   extDomain.Status == "enable", // 假设 "enable" 是活动状态
+				DomainType: domainType,
+				// 需要确定ProviderID和UserID的来源
+			}
+			s.db.Create(&newDomain)
+		} else {
+			// 域名已存在，更新信息
+			s.db.Model(&domain).Updates(models.Domain{
+				IsActive:   extDomain.Status == "enable",
+				DomainType: domainType,
+			})
+		}
+	}
+
+	return nil
+}
+
+// classifyDomain 根据域名名称判断其类型
+func classifyDomain(domainName string) string {
+	parts := strings.Split(domainName, ".")
+	switch len(parts) {
+	case 2:
+		return "二级域名"
+	case 3:
+		return "三级域名"
+	default:
+		if len(parts) > 3 {
+			return "多级域名"
+		}
+		return "未知类型"
+	}
 }

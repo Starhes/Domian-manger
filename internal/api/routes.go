@@ -72,6 +72,7 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 		admin.POST("/domains", adminHandler.CreateDomain)
 		admin.PUT("/domains/:id", adminHandler.UpdateDomain)
 		admin.DELETE("/domains/:id", adminHandler.DeleteDomain)
+		admin.POST("/domains/sync", adminHandler.SyncDomains)
 
 		// DNS服务商管理
 		admin.GET("/dns-providers", adminHandler.GetDNSProviders)

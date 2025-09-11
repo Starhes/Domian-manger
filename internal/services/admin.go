@@ -247,3 +247,9 @@ func (s *AdminService) GetStats() (map[string]interface{}, error) {
 
 	return stats, nil
 }
+
+// SyncDomains 同步域名
+func (s *AdminService) SyncDomains() error {
+	dnsService := NewDNSService(s.db)
+	return dnsService.SyncDomains()
+}

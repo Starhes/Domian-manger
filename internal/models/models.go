@@ -32,6 +32,9 @@ type Domain struct {
 	
 	// 关联
 	DNSRecords []DNSRecord `json:"dns_records,omitempty" gorm:"foreignKey:DomainID"`
+	DomainType string
+	UserID     uint
+	User       User
 }
 
 // DNS记录模型
