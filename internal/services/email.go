@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"domain-manager/internal/config"
 	"domain-manager/internal/models"
+	"domain-manager/internal/utils"
 	"fmt"
 	"net/smtp"
 	"strings"
@@ -13,16 +14,36 @@ import (
 )
 
 type EmailService struct {
-	cfg *config.Config
-	db  *gorm.DB
+	cfg    *config.Config
+	db     *gorm.DB
+	crypto *utils.CryptoService
 }
 
 func NewEmailService(cfg *config.Config) *EmailService {
-	return &EmailService{cfg: cfg}
+	// 初始化加密服务
+	crypto, err := utils.NewCryptoService(cfg.EncryptionKey[:32])
+	if err != nil {
+		crypto = nil // 如果初始化失败，设为nil，后续会检查
+	}
+	
+	return &EmailService{
+		cfg:    cfg,
+		crypto: crypto,
+	}
 }
 
 func NewEmailServiceWithDB(cfg *config.Config, db *gorm.DB) *EmailService {
-	return &EmailService{cfg: cfg, db: db}
+	// 初始化加密服务
+	crypto, err := utils.NewCryptoService(cfg.EncryptionKey[:32])
+	if err != nil {
+		crypto = nil // 如果初始化失败，设为nil，后续会检查
+	}
+	
+	return &EmailService{
+		cfg:    cfg,
+		db:     db,
+		crypto: crypto,
+	}
 }
 
 // SendVerificationEmail 发送邮箱验证邮件
@@ -100,12 +121,17 @@ func (s *EmailService) getActiveSMTPConfig() *models.SMTPConfig {
 }
 
 // decryptPassword 解密SMTP密码
-func (s *EmailService) decryptPassword(hashedPassword string) (string, error) {
-	// 注意：这里需要实现实际的解密逻辑
-	// 目前使用的是bcrypt，这是单向加密，不能解密
-	// 在实际应用中，应该使用可逆加密方法如AES
-	// 这里暂时返回原始值，仅用于演示
-	return hashedPassword, nil
+func (s *EmailService) decryptPassword(encryptedPassword string) (string, error) {
+	if s.crypto == nil {
+		return "", fmt.Errorf("加密服务未初始化")
+	}
+	
+	decryptedPassword, err := s.crypto.Decrypt(encryptedPassword)
+	if err != nil {
+		return "", fmt.Errorf("密码解密失败: %v", err)
+	}
+	
+	return decryptedPassword, nil
 }
 
 // getBaseURL 获取基础URL，优先级：配置文件 > HTTP请求头 > 默认值

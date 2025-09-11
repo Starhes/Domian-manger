@@ -3,6 +3,7 @@ package database
 import (
 	"domain-manager/internal/config"
 	"domain-manager/internal/models"
+	"domain-manager/internal/services"
 	"fmt"
 
 	"gorm.io/driver/mysql"
@@ -44,5 +45,6 @@ func Migrate(db *gorm.DB) error {
 		&models.EmailVerification{},
 		&models.PasswordReset{},
 		&models.SMTPConfig{},
+		&services.RefreshTokenModel{},
 	)
 }

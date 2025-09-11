@@ -1,10 +1,12 @@
 package config
 
 import (
+	"domain-manager/internal/utils"
 	"errors"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -25,6 +27,9 @@ type Config struct {
 
 	// JWT配置
 	JWTSecret string
+
+	// 加密配置
+	EncryptionKey string // 用于加密敏感数据如SMTP密码
 
 	// 邮件配置
 	SMTPHost     string
@@ -54,6 +59,8 @@ func Load() *Config {
 		DBType:     getEnv("DB_TYPE", "postgres"),
 
 		JWTSecret: getEnv("JWT_SECRET", ""), // 移除默认JWT密钥，强制用户设置
+
+		EncryptionKey: getEnv("ENCRYPTION_KEY", ""), // 用于加密敏感数据
 
 		SMTPHost:     getEnv("SMTP_HOST", "smtp.gmail.com"),
 		SMTPPort:     getEnvInt("SMTP_PORT", 587),
@@ -100,43 +107,92 @@ func getEnvInt(key string, defaultValue int) int {
 
 // validate 验证配置项的有效性
 func (c *Config) validate() error {
-	// 验证数据库密码
-	if c.DBPassword == "" {
-		return errors.New("数据库密码不能为空，请设置 DB_PASSWORD 环境变量")
+	isProduction := c.Environment == "production"
+	
+	// 验证端口
+	if err := utils.ValidatePort(c.Port); err != nil {
+		return fmt.Errorf("端口配置错误: %v", err)
 	}
-
-	// 验证JWT密钥
-	if c.JWTSecret == "" {
-		return errors.New("JWT密钥不能为空，请设置 JWT_SECRET 环境变量")
+	
+	// 验证必要的配置项
+	requiredConfigs := map[string]string{
+		"DB_PASSWORD":    c.DBPassword,
+		"JWT_SECRET":     c.JWTSecret,
+		"ENCRYPTION_KEY": c.EncryptionKey,
 	}
-
-	// JWT密钥长度检查
-	if len(c.JWTSecret) < 32 {
-		return errors.New("JWT密钥长度至少需要32个字符以确保安全性")
-	}
-
-	// 生产环境额外检查
-	if c.Environment == "production" {
-		// 检查是否使用了不安全的默认值
-		unsafeValues := []string{
-			"password", "admin123", "123456", "your_jwt_secret_key_change_this_in_production",
-			"your_secure_password_here", "change-this-in-production",
+	
+	for key, value := range requiredConfigs {
+		if value == "" {
+			return fmt.Errorf("%s 不能为空，请设置相应的环境变量", key)
 		}
-
-		for _, unsafe := range unsafeValues {
-			if c.DBPassword == unsafe {
-				return errors.New("生产环境不能使用默认或弱密码，请设置更强的 DB_PASSWORD")
-			}
-			if c.JWTSecret == unsafe {
-				return errors.New("生产环境不能使用默认的JWT密钥，请设置更强的 JWT_SECRET")
-			}
-		}
-
-		// 生产环境密码强度检查
-		if len(c.DBPassword) < 8 {
-			return errors.New("生产环境数据库密码长度至少需要8个字符")
+		
+		// 使用统一的配置验证
+		if err := utils.ValidateConfigValue(key, value, isProduction); err != nil {
+			return fmt.Errorf("%s 配置错误: %v", key, err)
 		}
 	}
-
+	
+	// 验证可选的SMTP配置
+	if c.SMTPPassword != "" {
+		if err := utils.ValidateConfigValue("SMTP_PASSWORD", c.SMTPPassword, isProduction); err != nil {
+			return fmt.Errorf("SMTP_PASSWORD 配置错误: %v", err)
+		}
+	}
+	
+	// 生产环境额外安全检查
+	if isProduction {
+		if err := c.validateProductionSecurity(); err != nil {
+			return err
+		}
+	}
+	
+	// 验证数据库类型
+	validDBTypes := []string{"postgres", "mysql"}
+	if !contains(validDBTypes, c.DBType) {
+		return fmt.Errorf("不支持的数据库类型: %s，支持的类型: %s", c.DBType, strings.Join(validDBTypes, ", "))
+	}
+	
 	return nil
+}
+
+// validateProductionSecurity 生产环境安全验证
+func (c *Config) validateProductionSecurity() error {
+	// 检查是否使用了明显的测试/默认值
+	dangerousValues := []string{
+		"test", "demo", "example", "sample", "default",
+		"localhost", "127.0.0.1", "your_", "change_this",
+		"password", "secret", "key", "token",
+	}
+	
+	securityConfigs := map[string]string{
+		"数据库密码":   c.DBPassword,
+		"JWT密钥":   c.JWTSecret,
+		"加密密钥":    c.EncryptionKey,
+	}
+	
+	for configName, configValue := range securityConfigs {
+		lowerValue := strings.ToLower(configValue)
+		for _, dangerous := range dangerousValues {
+			if strings.Contains(lowerValue, dangerous) {
+				return fmt.Errorf("生产环境的%s包含不安全的词汇 '%s'，请使用随机生成的密钥", configName, dangerous)
+			}
+		}
+	}
+	
+	// 检查BaseURL是否配置为生产域名
+	if c.BaseURL != "" && strings.Contains(c.BaseURL, "localhost") {
+		return errors.New("生产环境不能使用localhost作为BaseURL，请配置正确的域名")
+	}
+	
+	return nil
+}
+
+// contains 检查切片是否包含指定元素
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }

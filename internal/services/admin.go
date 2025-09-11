@@ -3,6 +3,7 @@ package services
 import (
 	"domain-manager/internal/config"
 	"domain-manager/internal/models"
+	"domain-manager/internal/utils"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -13,12 +14,25 @@ import (
 )
 
 type AdminService struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db     *gorm.DB
+	cfg    *config.Config
+	crypto *utils.CryptoService
 }
 
 func NewAdminService(db *gorm.DB, cfg *config.Config) *AdminService {
-	return &AdminService{db: db, cfg: cfg}
+	// 初始化加密服务
+	crypto, err := utils.NewCryptoService(cfg.EncryptionKey[:32]) // 使用前32字节作为密钥
+	if err != nil {
+		// 如果加密服务初始化失败，记录错误但不阻止服务启动
+		// 在生产环境中，应该返回错误而不是继续
+		crypto = nil
+	}
+	
+	return &AdminService{
+		db:     db,
+		cfg:    cfg,
+		crypto: crypto,
+	}
 }
 
 // 获取所有用户
@@ -64,10 +78,9 @@ func (s *AdminService) UpdateUser(userID uint, updates map[string]interface{}) (
 
 	// 处理邮箱更新
 	if email, ok := updates["email"].(string); ok && email != user.Email {
-		// 验证邮箱格式是否正确
-		// (简单验证，更复杂的验证可能需要正则表达式)
-		if !strings.Contains(email, "@") {
-			return nil, errors.New("邮箱格式不正确")
+		// 使用统一的邮箱验证函数
+		if err := models.ValidateEmail(email); err != nil {
+			return nil, err
 		}
 		// 检查新邮箱是否已被占用
 		var existingUser models.User
@@ -357,10 +370,14 @@ func (s *AdminService) CreateSMTPConfig(req models.CreateSMTPConfigRequest) (*mo
 		return nil, errors.New("配置名称已存在")
 	}
 
-	// 加密密码（这里使用简单的base64编码，生产环境建议使用更强的加密）
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	// 使用AES加密密码
+	if s.crypto == nil {
+		return nil, errors.New("加密服务未初始化")
+	}
+	
+	encryptedPassword, err := s.crypto.Encrypt(req.Password)
 	if err != nil {
-		return nil, errors.New("密码加密失败")
+		return nil, errors.New("密码加密失败: " + err.Error())
 	}
 
 	config := models.SMTPConfig{
@@ -368,7 +385,7 @@ func (s *AdminService) CreateSMTPConfig(req models.CreateSMTPConfigRequest) (*mo
 		Host:        req.Host,
 		Port:        req.Port,
 		Username:    req.Username,
-		Password:    string(hashedPassword),
+		Password:    encryptedPassword,
 		FromEmail:   req.FromEmail,
 		FromName:    req.FromName,
 		UseTLS:      req.UseTLS,
@@ -411,11 +428,15 @@ func (s *AdminService) UpdateSMTPConfig(configID uint, req models.UpdateSMTPConf
 		config.Username = req.Username
 	}
 	if req.Password != "" {
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, errors.New("密码加密失败")
+		if s.crypto == nil {
+			return nil, errors.New("加密服务未初始化")
 		}
-		config.Password = string(hashedPassword)
+		
+		encryptedPassword, err := s.crypto.Encrypt(req.Password)
+		if err != nil {
+			return nil, errors.New("密码加密失败: " + err.Error())
+		}
+		config.Password = encryptedPassword
 	}
 	if req.FromEmail != "" {
 		config.FromEmail = req.FromEmail
@@ -505,12 +526,22 @@ func (s *AdminService) TestSMTPConfig(configID uint, toEmail string) error {
 		return errors.New("SMTP配置不存在")
 	}
 
+	// 解密SMTP密码
+	if s.crypto == nil {
+		return errors.New("加密服务未初始化")
+	}
+	
+	decryptedPassword, err := s.crypto.Decrypt(smtpConfig.Password)
+	if err != nil {
+		return errors.New("密码解密失败: " + err.Error())
+	}
+
 	// 创建临时的配置对象用于测试
 	tempConfig := &config.Config{
 		SMTPHost:     smtpConfig.Host,
 		SMTPPort:     smtpConfig.Port,
 		SMTPUser:     smtpConfig.Username,
-		SMTPPassword: smtpConfig.Password, // 这里需要解密，但暂时先直接使用
+		SMTPPassword: decryptedPassword,
 		SMTPFrom:     smtpConfig.FromEmail,
 	}
 

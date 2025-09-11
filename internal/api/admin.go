@@ -3,6 +3,7 @@ package api
 import (
 	"domain-manager/internal/models"
 	"domain-manager/internal/services"
+	"domain-manager/internal/utils"
 	"net/http"
 	"strconv"
 
@@ -24,23 +25,40 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 	pageSizeStr := c.DefaultQuery("pageSize", "10")
 	search := c.Query("search")
 
+	// 验证分页参数
 	page, err := strconv.Atoi(pageStr)
-	if err != nil || page < 1 {
-		page = 1
+	if err != nil {
+		utils.HandleBadRequest(c, "页码格式不正确", err)
+		return
 	}
 
 	pageSize, err := strconv.Atoi(pageSizeStr)
-	if err != nil || pageSize < 1 || pageSize > 100 {
-		pageSize = 10
+	if err != nil {
+		utils.HandleBadRequest(c, "每页大小格式不正确", err)
+		return
+	}
+
+	page, pageSize, err = utils.ValidatePageParams(page, pageSize)
+	if err != nil {
+		utils.HandleBadRequest(c, err.Error(), err)
+		return
+	}
+
+	// 验证搜索查询
+	if search != "" {
+		if err := utils.ValidateSearchQuery(search); err != nil {
+			utils.HandleBadRequest(c, err.Error(), err)
+			return
+		}
 	}
 
 	users, total, err := h.adminService.GetUsers(page, pageSize, search)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户列表失败", "details": err.Error()})
+		utils.HandleInternalError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	utils.Success(c, gin.H{
 		"users": users,
 		"pagination": gin.H{
 			"page":     page,
@@ -53,19 +71,22 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 // 获取单个用户
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	userIDStr := c.Param("id")
-	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	
+	// 使用增强的ID验证
+	userIDUint64, err := utils.ValidateUserID(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的用户ID"})
+		utils.HandleBadRequest(c, err.Error(), err)
 		return
 	}
+	userID := uint(userIDUint64)
 
 	user, err := h.adminService.GetUser(uint(userID))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		utils.HandleNotFound(c, "用户")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user": user})
+	utils.Success(c, gin.H{"user": user})
 }
 
 // 更新用户
