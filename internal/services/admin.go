@@ -6,7 +6,6 @@ import (
 	"domain-manager/internal/utils"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
