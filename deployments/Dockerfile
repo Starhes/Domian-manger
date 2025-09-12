@@ -50,6 +50,7 @@ WORKDIR /app
 
 # 从构建阶段复制二进制文件
 COPY --from=server-builder /app/domain-max .
+COPY --from=server-builder /app/web/dist ./web/dist
 
 # 创建非root用户
 RUN addgroup -g 1001 -S appgroup && \
