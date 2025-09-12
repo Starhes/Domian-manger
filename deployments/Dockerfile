@@ -32,6 +32,9 @@ COPY pkg/ ./pkg/
 # 从第一阶段复制构建好的前端文件
 COPY --from=web-builder /app/web/dist ./web/dist
 
+# 验证文件结构
+RUN ls -la web/dist/ && ls -la web/dist/static/
+
 # 构建应用
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o domain-max ./cmd/server
 

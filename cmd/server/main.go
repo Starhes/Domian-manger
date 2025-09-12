@@ -4,16 +4,12 @@ import (
 	"domain-max/pkg/config"
 	"domain-max/pkg/database"
 	"domain-max/pkg/middleware"
-	"embed"
-	"io/fs"
 	"log"
-	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 )
-
-//go:embed ../../web/dist/*
-var webFiles embed.FS
 
 func main() {
 	// 加载配置
@@ -60,18 +56,15 @@ func main() {
 }
 
 func setupWebRoutes(router *gin.Engine) {
-	// 获取嵌入的前端文件系统
-	webFS, err := fs.Sub(webFiles, "web/dist")
-	if err != nil {
-		log.Fatal("无法加载前端文件:", err)
+	// 检查web/dist目录是否存在
+	webDistPath := "web/dist"
+	if _, err := os.Stat(webDistPath); os.IsNotExist(err) {
+		log.Printf("警告: web/dist 目录不存在，跳过静态文件服务")
+		return
 	}
 
 	// 静态文件服务 - 处理构建后的静态资源
-	staticFS, err := fs.Sub(webFS, "static")
-	if err != nil {
-		log.Fatal("无法加载静态文件:", err)
-	}
-	router.StaticFS("/static", http.FS(staticFS))
+	router.Static("/static", filepath.Join(webDistPath, "static"))
 
 	// 处理所有其他路由，返回index.html (用于React Router)
 	router.NoRoute(func(c *gin.Context) {
@@ -82,7 +75,8 @@ func setupWebRoutes(router *gin.Engine) {
 		}
 
 		// 尝试读取index.html
-		indexHTML, err := webFiles.ReadFile("web/dist/index.html")
+		indexPath := filepath.Join(webDistPath, "index.html")
+		indexHTML, err := os.ReadFile(indexPath)
 		if err != nil {
 			c.String(500, "无法加载前端页面")
 			return
