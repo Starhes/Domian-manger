@@ -123,7 +123,20 @@ func (c *Config) validate() error {
 	
 	for key, value := range requiredConfigs {
 		if value == "" {
-			return fmt.Errorf("%s 不能为空，请设置相应的环境变量", key)
+			if isProduction {
+				return fmt.Errorf("%s 不能为空，请设置相应的环境变量", key)
+			} else {
+				// 开发环境使用默认值
+				switch key {
+				case "DB_PASSWORD":
+					c.DBPassword = "dev_password_123"
+				case "JWT_SECRET":
+					c.JWTSecret = "dev_jwt_secret_key_for_development_only_not_for_production_use_this_is_64_chars"
+				case "ENCRYPTION_KEY":
+					c.EncryptionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+				}
+				continue
+			}
 		}
 		
 		// 使用统一的配置验证

@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:  # 支持手动触发
+  workflow_dispatch: # 支持手动触发
 
 env:
   REGISTRY: ghcr.io
@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    
+
     steps:
       # 步骤1: 生成安全镜像名称（全部小写）
       - name: Generate safe image names
