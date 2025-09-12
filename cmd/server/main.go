@@ -3,7 +3,7 @@ package main
 import (
 	"domain-max/pkg/config"
 	"domain-max/pkg/database"
-	"domain-max-refactored/pkg/middleware"
+	"domain-max/pkg/middleware"
 	"embed"
 	"io/fs"
 	"log"

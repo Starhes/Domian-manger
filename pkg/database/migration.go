@@ -1,9 +1,9 @@
 package database
 
 import (
-	"domain-max/pkg/auth/models"
-	"domain-max/pkg/dns/models"
-	"domain-max/pkg/email/models"
+	authmodels "domain-max/pkg/auth/models"
+	dnsmodels "domain-max/pkg/dns/models"
+	emailmodels "domain-max/pkg/email/models"
 	"log"
 
 	"gorm.io/gorm"
