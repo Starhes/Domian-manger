@@ -1,6 +1,8 @@
 ## 使用与运维（OPERATIONS）
 
-本文面向使用者与管理员，介绍日常操作、API 摘要、管理员工作流与故障排查。结合《README.md》《DEPLOYMENT.md》一起阅读更高效。
+文档导航： [README](README.md) | [DEPLOYMENT](DEPLOYMENT.md) | [OPERATIONS](OPERATIONS.md)
+
+本文面向使用者与管理员，介绍日常操作、API 摘要、管理员工作流与故障排查。结合 [README.md](README.md) 与 [DEPLOYMENT.md](DEPLOYMENT.md) 一起阅读更高效。
 
 ### 1. 首次登录与基础流程
 
@@ -111,4 +113,4 @@
 - 强认证与审核：限制管理员数量，定期审查活跃 SMTP/DNS 配置
 - 传输安全：HTTPS、HSTS、正确的反向代理头
 
-更多部署与安全细节见《DEPLOYMENT.md》。
+更多部署与安全细节见 [DEPLOYMENT.md](DEPLOYMENT.md)。

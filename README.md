@@ -1,9 +1,11 @@
 ## Domian-MAX（域名与 DNS 管理平台）
 
+文档导航： [README](README.md) | [DEPLOYMENT](DEPLOYMENT.md) | [OPERATIONS](OPERATIONS.md)
+
 一个开箱即用的全栈域名与 DNS 管理系统：后端基于 Go + Gin + Gorm，前端基于 React + Vite + Ant Design，内置用户注册登录、邮箱验证、密码找回、DNS 记录管理、DNS 服务商管理（示例：DNSPod），以及 SMTP 配置加密存储与测试。支持 Docker 一键构建与运行。
 
-- 详细部署指南请见《DEPLOYMENT.md》
-- 使用与运维指南请见《OPERATIONS.md》
+- 详细部署指南请见 [DEPLOYMENT.md](DEPLOYMENT.md)
+- 使用与运维指南请见 [OPERATIONS.md](OPERATIONS.md)
 
 ### 特性
 
@@ -61,7 +63,7 @@ go run .
 
 访问：`http://localhost:8080`（后端也会在生产构建后内置前端静态页），健康检查：`/api/health`。
 
-更多部署方式（含 Docker 一体化构建）请阅读《DEPLOYMENT.md》。
+更多部署方式（含 Docker 一体化构建）请阅读 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ### 必要环境变量
 
@@ -85,13 +87,13 @@ docker compose up -d --build
 
 构建会先打包前端并嵌入后端二进制中，容器启动后暴露 `:8080`。
 
-更多生产部署、安全清单、反向代理示例见《DEPLOYMENT.md》。
+更多生产部署、安全清单、反向代理示例见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 ### 使用向导
 
 - 首次启动后，数据库会通过 `init.sql` 初始化一个管理员：`admin@example.com / admin123`（请立刻修改）。
 - 前台注册用户需邮箱验证；未配置 SMTP 时，系统会在控制台打印验证/重置链接用于开发调试。
-- 管理端提供用户/域名/DNS/SMTP 等管理能力，详见《OPERATIONS.md》。
+- 管理端提供用户/域名/DNS/SMTP 等管理能力，详见 [OPERATIONS.md](OPERATIONS.md)。
 
 ### 开源许可
 

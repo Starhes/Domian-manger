@@ -1,6 +1,8 @@
 ## 部署指南（DEPLOYMENT）
 
-本文档覆盖本地开发、Docker 一体化、生产部署、安全加固与常见问题。配合《README.md》《OPERATIONS.md》联动使用。
+文档导航： [README](README.md) | [DEPLOYMENT](DEPLOYMENT.md) | [OPERATIONS](OPERATIONS.md)
+
+本文档覆盖本地开发、Docker 一体化、生产部署、安全加固与常见问题。配合 [README.md](README.md) 与 [OPERATIONS.md](OPERATIONS.md) 联动使用。
 
 ### 1. 先决条件
 
@@ -155,4 +157,4 @@ server {
 - 登录 401：确认 Cookie 域与 `BASE_URL`、反向代理头一致，并携带 `X-CSRF-Token`
 - DNS 无法创建：检查“DNS 服务商管理”是否已启用并填入正确凭据
 
-更多使用操作细节见《OPERATIONS.md》。
+更多使用操作细节见 [OPERATIONS.md](OPERATIONS.md)。
