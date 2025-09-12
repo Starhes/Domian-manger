@@ -1,4 +1,4 @@
-module domain-manager
+module domain-max
 
 go 1.23
 
