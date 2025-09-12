@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -16,14 +17,22 @@ func main() {
 	cfg := config.Load()
 
 	// 连接数据库
-	db, err := database.Connect(cfg)
-	if err != nil {
-		log.Fatal("数据库连接失败:", err)
-	}
+	var db *gorm.DB
+	var err error
+	
+	if cfg.Environment == "development" {
+		log.Println("开发环境：跳过数据库连接")
+		db = nil
+	} else {
+		db, err = database.Connect(cfg)
+		if err != nil {
+			log.Fatal("数据库连接失败:", err)
+		}
 
-	// 自动迁移数据库表
-	if err := database.Migrate(db); err != nil {
-		log.Fatal("数据库迁移失败:", err)
+		// 自动迁移数据库表
+		if err := database.Migrate(db); err != nil {
+			log.Fatal("数据库迁移失败:", err)
+		}
 	}
 
 	// 设置Gin模式
