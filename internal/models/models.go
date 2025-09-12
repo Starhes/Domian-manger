@@ -57,10 +57,12 @@ type DNSRecord struct {
 	Type       string         `json:"type" gorm:"not null;size:10;index"`                      // 记录类型，添加索引
 	Value      string         `json:"value" gorm:"not null;size:500"`                          // 记录值，限制长度
 	TTL        int            `json:"ttl" gorm:"default:600;check:ttl >= 1 AND ttl <= 604800"` // TTL范围检查
-	Priority   int            `json:"priority" gorm:"default:0"`                               // MX记录优先级
+	Priority   int            `json:"priority" gorm:"default:0"`                               // MX和SRV记录优先级
+	Weight     int            `json:"weight" gorm:"default:0"`                                 // SRV记录权重
+	Port       int            `json:"port" gorm:"default:0"`                                   // SRV记录端口
 	ExternalID string         `json:"external_id" gorm:"size:100"`                             // DNS服务商记录ID
 	Status     string         `json:"status" gorm:"default:active;size:20"`                    // 记录状态
-	Comment    string         `json:"comment" gorm:"size:255"`                                 // 记录备注
+	Comment    string         `json:"comment" gorm:"size:500"`                                 // 记录备注，增加长度
 	CreatedAt  time.Time      `json:"created_at" gorm:"index"`                                 // 添加时间索引
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
@@ -152,19 +154,53 @@ type LoginResponse struct {
 
 // DNS记录创建请求
 type CreateDNSRecordRequest struct {
-	DomainID  uint   `json:"domain_id" binding:"required"`
-	Subdomain string `json:"subdomain" binding:"required"`
-	Type      string `json:"type" binding:"required,oneof=A CNAME TXT MX"`
-	Value     string `json:"value" binding:"required"`
-	TTL       int    `json:"ttl"`
+	DomainID    uint   `json:"domain_id" binding:"required"`
+	Subdomain   string `json:"subdomain" binding:"required"`
+	Type        string `json:"type" binding:"required,oneof=A AAAA CNAME TXT MX NS PTR SRV CAA"`
+	Value       string `json:"value" binding:"required"`
+	TTL         int    `json:"ttl"`
+	Priority    int    `json:"priority"`    // MX和SRV记录的优先级
+	Weight      int    `json:"weight"`      // SRV记录的权重
+	Port        int    `json:"port"`        // SRV记录的端口
+	Comment     string `json:"comment"`     // 记录备注
+	AllowPrivateIP bool `json:"allow_private_ip"` // 是否允许私有IP
 }
 
 // DNS记录更新请求
 type UpdateDNSRecordRequest struct {
+	Subdomain   string `json:"subdomain"`
+	Type        string `json:"type" binding:"oneof=A AAAA CNAME TXT MX NS PTR SRV CAA"`
+	Value       string `json:"value"`
+	TTL         int    `json:"ttl"`
+	Priority    int    `json:"priority"`
+	Weight      int    `json:"weight"`
+	Port        int    `json:"port"`
+	Comment     string `json:"comment"`
+	AllowPrivateIP bool `json:"allow_private_ip"`
+}
+
+// DNS记录批量操作请求
+type BatchDNSRecordRequest struct {
+	Records []CreateDNSRecordRequest `json:"records" binding:"required,min=1,max=50"`
+}
+
+// DNS记录导出响应
+type DNSRecordExportResponse struct {
+	Records []DNSRecordExport `json:"records"`
+	Total   int               `json:"total"`
+}
+
+// DNS记录导出格式
+type DNSRecordExport struct {
 	Subdomain string `json:"subdomain"`
-	Type      string `json:"type" binding:"oneof=A CNAME TXT MX"`
+	Type      string `json:"type"`
 	Value     string `json:"value"`
 	TTL       int    `json:"ttl"`
+	Priority  int    `json:"priority,omitempty"`
+	Weight    int    `json:"weight,omitempty"`
+	Port      int    `json:"port,omitempty"`
+	Comment   string `json:"comment,omitempty"`
+	Domain    string `json:"domain"`
 }
 
 // 忘记密码请求
@@ -364,11 +400,32 @@ func (r *DNSRecord) ValidateDNSRecord() error {
 		return fmt.Errorf("TTL值错误: %v", err)
 	}
 	
-	// 如果是MX记录，验证优先级
-	if r.Type == "MX" && (r.Priority < 0 || r.Priority > 65535) {
-		return fmt.Errorf("MX记录优先级必须在0-65535之间")
+	// 验证特定记录类型的额外字段
+	if err := r.validateTypeSpecificFields(); err != nil {
+		return err
 	}
 	
+	return nil
+}
+
+// validateTypeSpecificFields 验证特定记录类型的字段
+func (r *DNSRecord) validateTypeSpecificFields() error {
+	switch strings.ToUpper(r.Type) {
+	case "MX":
+		if r.Priority < 0 || r.Priority > 65535 {
+			return fmt.Errorf("MX记录优先级必须在0-65535之间")
+		}
+	case "SRV":
+		if r.Priority < 0 || r.Priority > 65535 {
+			return fmt.Errorf("SRV记录优先级必须在0-65535之间")
+		}
+		if r.Weight < 0 || r.Weight > 65535 {
+			return fmt.Errorf("SRV记录权重必须在0-65535之间")
+		}
+		if r.Port < 1 || r.Port > 65535 {
+			return fmt.Errorf("SRV记录端口必须在1-65535之间")
+		}
+	}
 	return nil
 }
 
@@ -382,17 +439,22 @@ func validateSubdomain(subdomain string) error {
 		return errors.New("子域名长度不能超过63个字符")
 	}
 	
-	// 检查是否包含非法字符
-	validSubdomainPattern := regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?$`)
-	if !validSubdomainPattern.MatchString(subdomain) {
-		return errors.New("子域名只能包含字母、数字和连字符，且不能以连字符开头或结尾")
+	// 支持通配符子域名
+	if subdomain == "*" {
+		return nil
 	}
 	
-	// 检查是否包含不安全的保留字
-	reservedNames := []string{"www", "mail", "ftp", "admin", "administrator", "root", "api", "dns", "ns1", "ns2"}
-	for _, reserved := range reservedNames {
-		if strings.EqualFold(subdomain, reserved) {
-			return fmt.Errorf("子域名 '%s' 是保留名称，请使用其他名称", subdomain)
+	// 支持下划线（用于某些特殊记录如_dmarc, _spf等）
+	validSubdomainPattern := regexp.MustCompile(`^[a-zA-Z0-9_]([a-zA-Z0-9\-_]*[a-zA-Z0-9_])?$`)
+	if !validSubdomainPattern.MatchString(subdomain) {
+		return errors.New("子域名只能包含字母、数字、连字符和下划线，且不能以连字符开头或结尾")
+	}
+	
+	// 放宽保留名称检查，只检查真正危险的名称
+	dangerousNames := []string{"localhost", "broadcasthost"}
+	for _, dangerous := range dangerousNames {
+		if strings.EqualFold(subdomain, dangerous) {
+			return fmt.Errorf("子域名 '%s' 是系统保留名称，不允许使用", subdomain)
 		}
 	}
 	
@@ -410,6 +472,7 @@ func validateDNSType(dnsType string) error {
 		"NS":    true,
 		"PTR":   true,
 		"SRV":   true,
+		"CAA":   true,  // 证书颁发机构授权记录
 	}
 	
 	if !validTypes[strings.ToUpper(dnsType)] {
@@ -425,8 +488,8 @@ func validateDNSValue(dnsType, value string) error {
 		return errors.New("DNS记录值不能为空")
 	}
 	
-	if len(value) > 500 {
-		return errors.New("DNS记录值长度不能超过500个字符")
+	if len(value) > 1000 { // 增加长度限制以支持更长的TXT记录
+		return errors.New("DNS记录值长度不能超过1000个字符")
 	}
 	
 	switch strings.ToUpper(dnsType) {
@@ -446,6 +509,8 @@ func validateDNSValue(dnsType, value string) error {
 		return validateDomainName(value)
 	case "SRV":
 		return validateSRVRecord(value)
+	case "CAA":
+		return validateCAARecord(value)
 	default:
 		// 对于其他类型，只进行基本的长度检查
 		return nil
@@ -454,21 +519,24 @@ func validateDNSValue(dnsType, value string) error {
 
 // validateIPv4Address 验证IPv4地址
 func validateIPv4Address(ip string) error {
-	parts := strings.Split(ip, ".")
-	if len(parts) != 4 {
+	// 使用标准库验证IP地址格式
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
 		return errors.New("IPv4地址格式不正确")
 	}
 	
-	for _, part := range parts {
-		if num, err := strconv.Atoi(part); err != nil || num < 0 || num > 255 {
-			return errors.New("IPv4地址格式不正确")
-		}
+	// 确保是IPv4地址
+	if parsedIP.To4() == nil {
+		return errors.New("不是有效的IPv4地址")
 	}
 	
-	// 检查私有网络地址（安全考虑）
-	if isPrivateIP(ip) {
-		return errors.New("不允许使用私有网络地址")
+	// 检查是否是保留地址
+	if isReservedIP(ip) {
+		return errors.New("不允许使用保留IP地址（如0.0.0.0、255.255.255.255等）")
 	}
+	
+	// 注意：移除了私有IP检查，因为在某些场景下需要使用私有IP
+	// 如果需要禁止私有IP，应该在业务层面通过AllowPrivateIP字段控制
 	
 	return nil
 }

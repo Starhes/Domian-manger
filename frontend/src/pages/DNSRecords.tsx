@@ -11,13 +11,30 @@ import {
   message,
   Typography,
   Tag,
-  Card
+  Card,
+  Upload,
+  Checkbox,
+  InputNumber,
+  Tooltip,
+  Divider,
+  Row,
+  Col,
+  Statistic
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { 
+  PlusOutlined, 
+  EditOutlined, 
+  DeleteOutlined, 
+  DownloadOutlined, 
+  UploadOutlined,
+  InfoCircleOutlined,
+  AppstoreAddOutlined
+} from '@ant-design/icons'
 import api from '../utils/api'
 
-const { Title } = Typography
+const { Title, Text } = Typography
 const { Option } = Select
+const { TextArea } = Input
 
 interface DNSRecord {
   id: number
@@ -25,6 +42,10 @@ interface DNSRecord {
   type: string
   value: string
   ttl: number
+  priority: number
+  weight: number
+  port: number
+  comment: string
   created_at: string
   domain: {
     id: number
@@ -38,17 +59,49 @@ interface Domain {
   is_active: boolean
 }
 
+interface DNSRecordType {
+  value: string
+  label: string
+  description: string
+  fields: string[]
+}
+
+interface TTLOption {
+  value: number
+  label: string
+  description: string
+}
+
+interface RecordStats {
+  total_records: number
+  quota: number
+  quota_used: number
+  type_stats: Array<{ type: string; count: number }>
+  domain_stats: Array<{ domain_name: string; count: number }>
+}
+
 const DNSRecords = () => {
   const [records, setRecords] = useState<DNSRecord[]>([])
   const [domains, setDomains] = useState<Domain[]>([])
+  const [recordTypes, setRecordTypes] = useState<DNSRecordType[]>([])
+  const [ttlOptions, setTTLOptions] = useState<TTLOption[]>([])
+  const [stats, setStats] = useState<RecordStats | null>(null)
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
+  const [batchModalVisible, setBatchModalVisible] = useState(false)
+  const [importModalVisible, setImportModalVisible] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DNSRecord | null>(null)
+  const [selectedRecordType, setSelectedRecordType] = useState<string>('')
   const [form] = Form.useForm()
+  const [batchForm] = Form.useForm()
+  const [importForm] = Form.useForm()
 
   useEffect(() => {
     fetchRecords()
     fetchDomains()
+    fetchRecordTypes()
+    fetchTTLOptions()
+    fetchStats()
   }, [])
 
   const fetchRecords = async () => {
@@ -69,6 +122,33 @@ const DNSRecords = () => {
       setDomains(response.data.domains || [])
     } catch (error) {
       message.error('获取域名列表失败')
+    }
+  }
+
+  const fetchRecordTypes = async () => {
+    try {
+      const response = await api.get('/api/dns-records/types')
+      setRecordTypes(response.data.types || [])
+    } catch (error) {
+      console.error('获取记录类型失败:', error)
+    }
+  }
+
+  const fetchTTLOptions = async () => {
+    try {
+      const response = await api.get('/api/dns-records/ttl-options')
+      setTTLOptions(response.data.options || [])
+    } catch (error) {
+      console.error('获取TTL选项失败:', error)
+    }
+  }
+
+  const fetchStats = async () => {
+    try {
+      const response = await api.get('/api/dns-records/stats')
+      setStats(response.data)
+    } catch (error) {
+      console.error('获取统计信息失败:', error)
     }
   }
 

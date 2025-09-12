@@ -64,6 +64,16 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	protected.POST("/dns-records", middleware.DNSOperationRateLimit(), dnsHandler.CreateDNSRecord)
 	protected.PUT("/dns-records/:id", middleware.DNSOperationRateLimit(), dnsHandler.UpdateDNSRecord)
 	protected.DELETE("/dns-records/:id", middleware.DNSOperationRateLimit(), dnsHandler.DeleteDNSRecord)
+	
+	// DNS记录批量操作
+	protected.POST("/dns-records/batch", middleware.DNSOperationRateLimit(), dnsHandler.BatchCreateDNSRecords)
+	protected.GET("/dns-records/export", dnsHandler.ExportDNSRecords)
+	protected.POST("/dns-records/import", middleware.DNSOperationRateLimit(), dnsHandler.ImportDNSRecords)
+	
+	// DNS记录类型和选项
+	protected.GET("/dns-records/types", dnsHandler.GetDNSRecordTypes)
+	protected.GET("/dns-records/ttl-options", dnsHandler.GetTTLOptions)
+	protected.GET("/dns-records/stats", dnsHandler.GetDNSRecordStats)
 	}
 
 	// 需要认证且支持token撤销的路由

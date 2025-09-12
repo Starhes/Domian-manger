@@ -28,17 +28,22 @@ func (s *DNSService) GetUserDNSRecords(userID uint) ([]models.DNSRecord, error) 
 
 // 创建DNS记录
 func (s *DNSService) CreateDNSRecord(userID uint, req models.CreateDNSRecordRequest) (*models.DNSRecord, error) {
+	// 验证请求数据
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("请求参数验证失败: %v", err)
+	}
+
 	// 检查域名是否存在且可用
 	var domain models.Domain
 	if err := s.db.Where("id = ? AND is_active = true", req.DomainID).First(&domain).Error; err != nil {
 		return nil, errors.New("域名不存在或不可用")
 	}
 
-	// 检查子域名是否已被占用
+	// 检查子域名是否已被占用（同一域名下同一子域名同一类型不能重复）
 	var existingRecord models.DNSRecord
 	if err := s.db.Where("domain_id = ? AND subdomain = ? AND type = ?",
 		req.DomainID, req.Subdomain, req.Type).First(&existingRecord).Error; err == nil {
-		return nil, errors.New("该子域名记录已存在")
+		return nil, fmt.Errorf("该子域名的%s记录已存在", req.Type)
 	}
 
 	// 检查用户DNS记录配额
@@ -61,6 +66,10 @@ func (s *DNSService) CreateDNSRecord(userID uint, req models.CreateDNSRecordRequ
 		Type:      req.Type,
 		Value:     req.Value,
 		TTL:       req.TTL,
+		Priority:  req.Priority,
+		Weight:    req.Weight,
+		Port:      req.Port,
+		Comment:   req.Comment,
 		Status:    "active",
 	}
 
@@ -100,6 +109,11 @@ func (s *DNSService) CreateDNSRecord(userID uint, req models.CreateDNSRecordRequ
 
 // 更新DNS记录
 func (s *DNSService) UpdateDNSRecord(userID, recordID uint, req models.UpdateDNSRecordRequest) (*models.DNSRecord, error) {
+	// 验证请求数据
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("请求参数验证失败: %v", err)
+	}
+
 	var record models.DNSRecord
 	if err := s.db.Preload("Domain").Where("id = ? AND user_id = ?", recordID, userID).First(&record).Error; err != nil {
 		return nil, errors.New("DNS记录不存在")
@@ -129,9 +143,30 @@ func (s *DNSService) UpdateDNSRecord(userID, recordID uint, req models.UpdateDNS
 		record.TTL = req.TTL
 		updated = true
 	}
+	if req.Priority != record.Priority {
+		record.Priority = req.Priority
+		updated = true
+	}
+	if req.Weight != record.Weight {
+		record.Weight = req.Weight
+		updated = true
+	}
+	if req.Port != record.Port {
+		record.Port = req.Port
+		updated = true
+	}
+	if req.Comment != record.Comment {
+		record.Comment = req.Comment
+		updated = true
+	}
 
 	if !updated {
 		return &record, nil
+	}
+
+	// 验证更新后的记录
+	if err := record.ValidateDNSRecord(); err != nil {
+		return nil, fmt.Errorf("DNS记录验证失败: %v", err)
 	}
 
 	// 调用DNS服务商API更新记录
