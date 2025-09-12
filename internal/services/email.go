@@ -95,7 +95,8 @@ func (s *EmailService) isConfigured() bool {
 	// 优先检查数据库配置
 	if s.db != nil {
 		if config := s.getActiveSMTPConfig(); config != nil {
-			return true
+			// 验证数据库配置的完整性
+			return s.validateSMTPConfig(config)
 		}
 	}
 	
@@ -104,6 +105,15 @@ func (s *EmailService) isConfigured() bool {
 		s.cfg.SMTPUser != "" &&
 		s.cfg.SMTPPassword != "" &&
 		s.cfg.SMTPFrom != ""
+}
+
+// validateSMTPConfig 验证SMTP配置的完整性
+func (s *EmailService) validateSMTPConfig(config *models.SMTPConfig) bool {
+	return config.Host != "" &&
+		config.Port > 0 && config.Port <= 65535 &&
+		config.Username != "" &&
+		config.Password != "" &&
+		config.FromEmail != ""
 }
 
 // getActiveSMTPConfig 获取激活的SMTP配置
@@ -268,12 +278,21 @@ func (s *EmailService) sendEmailWithTLS(addr string, auth smtp.Auth, from string
 
 // buildEmailMessage 构建标准邮件格式
 func (s *EmailService) buildEmailMessage(to, subject, body string) string {
+	// 动态获取发件人
+	from := s.cfg.SMTPFrom
+	if s.db != nil {
+		if config := s.getActiveSMTPConfig(); config != nil {
+			from = config.FromEmail
+		}
+	}
+
 	headers := make(map[string]string)
-	headers["From"] = s.cfg.SMTPFrom
+	headers["From"] = from
 	headers["To"] = to
 	headers["Subject"] = subject
 	headers["MIME-Version"] = "1.0"
 	headers["Content-Type"] = "text/html; charset=UTF-8"
+	headers["Content-Transfer-Encoding"] = "quoted-printable"
 
 	var msg strings.Builder
 	for k, v := range headers {
@@ -304,44 +323,77 @@ func (s *EmailService) buildVerificationEmailBodyWithURL(email, token, baseURL s
         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background: #1890ff; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
         .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
-        .button { display: inline-block; background: #1890ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .button { display: inline-block; background: #1890ff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+        .button:hover { background: #40a9ff; }
         .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+        .welcome { background: #f6ffed; border: 1px solid #b7eb8f; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center; }
+        .info { background: #e6f7ff; border-left: 4px solid #1890ff; padding: 15px; margin: 20px 0; }
+        .steps { background: #fafafa; padding: 15px; border-radius: 5px; margin: 20px 0; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🚀 域名管理系统</h1>
+        <p style="margin: 0; opacity: 0.9;">欢迎加入我们的服务</p>
     </div>
     <div class="content">
-        <h2>欢迎加入我们！</h2>
-        <p>您好，</p>
-        <p>感谢您注册域名管理系统。为了确保账户安全，请点击下面的按钮激活您的账户：</p>
+        <div class="welcome">
+            <h2 style="color: #52c41a; margin-top: 0;">🎉 欢迎注册成功！</h2>
+            <p style="margin-bottom: 0;">您距离开始使用我们的服务只差一步</p>
+        </div>
+        
+        <p>您好 <strong>%s</strong>，</p>
+        <p>感谢您注册域名管理系统！为了确保账户安全和邮箱的有效性，请验证您的邮箱地址。</p>
+        
+        <div class="steps">
+            <p><strong>📋 激活步骤：</strong></p>
+            <ol>
+                <li>点击下方的"激活账户"按钮</li>
+                <li>浏览器将自动跳转到激活页面</li>
+                <li>看到成功消息后，您就可以登录使用了</li>
+            </ol>
+        </div>
         
         <p style="text-align: center;">
             <a href="%s" class="button">🔗 激活账户</a>
         </p>
         
         <p>如果按钮无法点击，请复制以下链接到浏览器地址栏：</p>
-        <p style="word-break: break-all; background: #e6f7ff; padding: 10px; border-radius: 3px;">
-            <code>%s</code>
+        <p style="word-break: break-all; background: #e6f7ff; padding: 10px; border-radius: 3px; font-family: monospace; font-size: 14px;">
+            %s
         </p>
         
-        <p><strong>注意：</strong></p>
-        <ul>
-            <li>此链接将在24小时后过期</li>
-            <li>如果您没有注册账户，请忽略此邮件</li>
-            <li>请勿将此链接分享给他人</li>
-        </ul>
+        <div class="info">
+            <p><strong>🛡️ 安全提醒：</strong></p>
+            <ul style="margin: 0; padding-left: 20px;">
+                <li>此激活链接将在24小时后过期</li>
+                <li>如果您没有注册账户，请忽略此邮件</li>
+                <li>请勿将此链接分享给他人</li>
+                <li>激活后您可以立即开始管理您的域名</li>
+            </ul>
+        </div>
         
-        <p>如有任何问题，请联系我们的技术支持。</p>
+        <div style="margin: 30px 0; padding: 20px; background: #fff7e6; border-radius: 5px; border-left: 4px solid #faad14;">
+            <p style="margin: 0;"><strong>💡 激活后您可以：</strong></p>
+            <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                <li>创建和管理DNS记录</li>
+                <li>配置子域名</li>
+                <li>监控域名状态</li>
+                <li>获得专业的技术支持</li>
+            </ul>
+        </div>
         
-        <p>祝您使用愉快！<br>域名管理系统团队</p>
+        <p>如有任何问题，请联系我们的技术支持团队，我们将竭诚为您服务。</p>
+        
+        <p>祝您使用愉快！<br><strong>域名管理系统团队</strong></p>
     </div>
     <div class="footer">
         <p>此邮件由系统自动发送，请勿回复。</p>
+        <p>域名管理系统 - 让域名管理更简单</p>
+        <p style="margin-top: 10px;">如果您不想接收此类邮件，请联系客服取消订阅。</p>
     </div>
 </body>
-</html>`, verifyURL, verifyURL)
+</html>`, email, verifyURL, verifyURL)
 }
 
 // buildPasswordResetEmailBody 构建密码重置邮件内容
@@ -406,4 +458,260 @@ func (s *EmailService) buildPasswordResetEmailBodyWithURL(email, token, baseURL 
     </div>
 </body>
 </html>`, resetURL, resetURL)
+}
+
+// TestSMTPConnection 测试SMTP连接
+func (s *EmailService) TestSMTPConnection() error {
+	// 获取SMTP配置（数据库优先，环境变量次之）
+	var host, user, password string
+	var port int
+	var useTLS bool
+	
+	if dbConfig := s.getActiveSMTPConfig(); dbConfig != nil {
+		// 使用数据库配置
+		host = dbConfig.Host
+		port = dbConfig.Port
+		user = dbConfig.Username
+		useTLS = dbConfig.UseTLS
+		
+		// 解密密码
+		decryptedPassword, err := s.decryptPassword(dbConfig.Password)
+		if err != nil {
+			return fmt.Errorf("密码解密失败: %v", err)
+		}
+		password = decryptedPassword
+	} else {
+		// 回退到环境变量配置
+		host = s.cfg.SMTPHost
+		port = s.cfg.SMTPPort
+		user = s.cfg.SMTPUser
+		password = s.cfg.SMTPPassword
+		useTLS = (port == 587) // 默认587端口使用TLS
+	}
+
+	if host == "" || user == "" || password == "" {
+		return fmt.Errorf("SMTP配置不完整")
+	}
+
+	// 设置认证
+	auth := smtp.PlainAuth("", user, password, host)
+
+	// SMTP服务器地址
+	addr := fmt.Sprintf("%s:%d", host, port)
+
+	// 测试连接
+	if useTLS || port == 587 {
+		return s.testSMTPConnectionWithTLS(addr, auth, host)
+	}
+
+	// 标准SMTP连接测试
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("连接SMTP服务器失败: %v", err)
+	}
+	defer client.Close()
+
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP认证失败: %v", err)
+	}
+
+	return client.Quit()
+}
+
+// testSMTPConnectionWithTLS 测试TLS SMTP连接
+func (s *EmailService) testSMTPConnectionWithTLS(addr string, auth smtp.Auth, host string) error {
+	// 创建客户端
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("连接SMTP服务器失败: %v", err)
+	}
+	defer client.Close()
+
+	// 启动TLS
+	if err = client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+		return fmt.Errorf("启动TLS失败: %v", err)
+	}
+
+	// 认证
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP认证失败: %v", err)
+	}
+
+	return client.Quit()
+}
+
+// SendTestEmail 发送测试邮件
+func (s *EmailService) SendTestEmail(toEmail string) error {
+	return s.SendTestEmailWithContext(nil, toEmail)
+}
+
+// SendTestEmailWithContext 发送测试邮件（支持HTTP上下文）
+func (s *EmailService) SendTestEmailWithContext(c *gin.Context, toEmail string) error {
+	if !s.isConfigured() {
+		return fmt.Errorf("SMTP服务未配置")
+	}
+
+	subject := "SMTP配置测试邮件 - 域名管理系统"
+	body := s.buildTestEmailBody(toEmail)
+
+	return s.sendEmail(toEmail, subject, body)
+}
+
+// buildTestEmailBody 构建测试邮件内容
+func (s *EmailService) buildTestEmailBody(email string) string {
+	return fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SMTP配置测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #52c41a; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .success { background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+        .info { background: #e6f7ff; border-left: 4px solid #1890ff; padding: 15px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✅ SMTP配置测试成功</h1>
+    </div>
+    <div class="content">
+        <div class="success">
+            <p><strong>🎉 恭喜！SMTP邮件发送功能正常工作</strong></p>
+        </div>
+        
+        <p>您好，</p>
+        <p>这是一封由域名管理系统自动发送的测试邮件，用于验证SMTP配置是否正常工作。</p>
+        
+        <div class="info">
+            <p><strong>📧 测试信息：</strong></p>
+            <ul>
+                <li>收件人：%s</li>
+                <li>发送时间：%s</li>
+                <li>系统状态：正常运行</li>
+            </ul>
+        </div>
+        
+        <p>如果您能看到这封邮件，说明：</p>
+        <ul>
+            <li>✅ SMTP服务器连接正常</li>
+            <li>✅ 认证信息正确</li>
+            <li>✅ 邮件发送功能可用</li>
+            <li>✅ 用户注册邮件验证功能已就绪</li>
+        </ul>
+        
+        <p>现在您的域名管理系统可以正常发送用户注册验证邮件和密码重置邮件了。</p>
+        
+        <p>如有任何问题，请联系系统管理员。</p>
+        
+        <p>祝您使用愉快！<br>域名管理系统团队</p>
+    </div>
+    <div class="footer">
+        <p>此邮件由系统自动发送，请勿回复。</p>
+        <p>域名管理系统 - 让域名管理更简单</p>
+    </div>
+</body>
+</html>`, email, time.Now().Format("2006-01-02 15:04:05"))
+}
+
+// testSMTPConnectionWithTLS 测试TLS SMTP连接
+func (s *EmailService) testSMTPConnectionWithTLS(addr string, auth smtp.Auth, host string) error {
+	// 创建客户端
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("连接SMTP服务器失败: %v", err)
+	}
+	defer client.Close()
+
+	// 启动TLS
+	if err = client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+		return fmt.Errorf("启动TLS失败: %v", err)
+	}
+
+	// 认证
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("SMTP认证失败: %v", err)
+	}
+
+	return client.Quit()
+}
+
+// SendTestEmail 发送测试邮件
+func (s *EmailService) SendTestEmail(toEmail string) error {
+	return s.SendTestEmailWithContext(nil, toEmail)
+}
+
+// SendTestEmailWithContext 发送测试邮件（支持HTTP上下文）
+func (s *EmailService) SendTestEmailWithContext(c *gin.Context, toEmail string) error {
+	if !s.isConfigured() {
+		return fmt.Errorf("SMTP服务未配置")
+	}
+
+	subject := "SMTP配置测试邮件 - 域名管理系统"
+	body := s.buildTestEmailBody(toEmail)
+
+	return s.sendEmail(toEmail, subject, body)
+}
+
+// buildTestEmailBody 构建测试邮件内容
+func (s *EmailService) buildTestEmailBody(email string) string {
+	return fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SMTP配置测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #52c41a; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .success { background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+        .info { background: #e6f7ff; border-left: 4px solid #1890ff; padding: 15px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>✅ SMTP配置测试成功</h1>
+    </div>
+    <div class="content">
+        <div class="success">
+            <p><strong>🎉 恭喜！SMTP邮件发送功能正常工作</strong></p>
+        </div>
+        
+        <p>您好，</p>
+        <p>这是一封由域名管理系统自动发送的测试邮件，用于验证SMTP配置是否正常工作。</p>
+        
+        <div class="info">
+            <p><strong>� 测试信息：</strong></p>
+            <ul>
+                <li>收件人：%s</li>
+                <li>发送时间：%s</li>
+                <li>系统状态：正常运行</li>
+            </ul>
+        </div>
+        
+        <p>如果您能看到这封邮件，说明：</p>
+        <ul>
+            <li>✅ SMTP服务器连接正常</li>
+            <li>✅ 认证信息正确</li>
+            <li>✅ 邮件发送功能可用</li>
+            <li>✅ 用户注册邮件验证功能已就绪</li>
+        </ul>
+        
+        <p>现在您的域名管理系统可以正常发送用户注册验证邮件和密码重置邮件了。</p>
+        
+        <p>如有任何问题，请联系系统管理员。</p>
+        
+        <p>祝您使用愉快！<br>域名管理系统团队</p>
+    </div>
+    <div class="footer">
+        <p>此邮件由系统自动发送，请勿回复。</p>
+        <p>域名管理系统 - 让域名管理更简单</p>
+    </div>
+</body>
+</html>`, email, time.Now().Format("2006-01-02 15:04:05"))
 }

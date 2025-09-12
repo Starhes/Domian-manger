@@ -95,6 +95,24 @@ docker compose up -d --build
 - 前台注册用户需邮箱验证；未配置 SMTP 时，系统会在控制台打印验证/重置链接用于开发调试。
 - 管理端提供用户/域名/DNS/SMTP 等管理能力，详见 [OPERATIONS.md](OPERATIONS.md)。
 
+### 测试文件清理
+
+项目包含一些开发和测试辅助文件，生产部署前建议清理：
+
+```bash
+# 预览将要清理的测试文件
+bash scripts/cleanup_test_files.sh --preview
+
+# 备份重要配置后清理
+bash scripts/cleanup_test_files.sh --backup
+bash scripts/cleanup_test_files.sh
+
+# 或直接强制清理
+bash scripts/cleanup_test_files.sh --force
+```
+
+详细说明见 [docs/TEST_FILES_MANAGEMENT.md](docs/TEST_FILES_MANAGEMENT.md)。
+
 ### 开源许可
 
 见 `LICENSE`。
