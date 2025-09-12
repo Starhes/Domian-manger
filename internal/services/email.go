@@ -590,7 +590,7 @@ func (s *EmailService) buildTestEmailBody(email string) string {
             <p><strong>📧 测试信息：</strong></p>
             <ul>
                 <li>收件人：%s</li>
-                <li>发送时间：%s</li>
+                <li>发送时间：当前时间</li>
                 <li>系统状态：正常运行</li>
             </ul>
         </div>
@@ -614,104 +614,5 @@ func (s *EmailService) buildTestEmailBody(email string) string {
         <p>域名管理系统 - 让域名管理更简单</p>
     </div>
 </body>
-</html>`, email, time.Now().Format("2006-01-02 15:04:05"))
-}
-
-// testSMTPConnectionWithTLS 测试TLS SMTP连接
-func (s *EmailService) testSMTPConnectionWithTLS(addr string, auth smtp.Auth, host string) error {
-	// 创建客户端
-	client, err := smtp.Dial(addr)
-	if err != nil {
-		return fmt.Errorf("连接SMTP服务器失败: %v", err)
-	}
-	defer client.Close()
-
-	// 启动TLS
-	if err = client.StartTLS(&tls.Config{ServerName: host}); err != nil {
-		return fmt.Errorf("启动TLS失败: %v", err)
-	}
-
-	// 认证
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("SMTP认证失败: %v", err)
-	}
-
-	return client.Quit()
-}
-
-// SendTestEmail 发送测试邮件
-func (s *EmailService) SendTestEmail(toEmail string) error {
-	return s.SendTestEmailWithContext(nil, toEmail)
-}
-
-// SendTestEmailWithContext 发送测试邮件（支持HTTP上下文）
-func (s *EmailService) SendTestEmailWithContext(c *gin.Context, toEmail string) error {
-	if !s.isConfigured() {
-		return fmt.Errorf("SMTP服务未配置")
-	}
-
-	subject := "SMTP配置测试邮件 - 域名管理系统"
-	body := s.buildTestEmailBody(toEmail)
-
-	return s.sendEmail(toEmail, subject, body)
-}
-
-// buildTestEmailBody 构建测试邮件内容
-func (s *EmailService) buildTestEmailBody(email string) string {
-	return fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>SMTP配置测试</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: #52c41a; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
-        .success { background: #f6ffed; border: 1px solid #b7eb8f; padding: 15px; border-radius: 5px; margin: 20px 0; }
-        .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
-        .info { background: #e6f7ff; border-left: 4px solid #1890ff; padding: 15px; margin: 20px 0; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>✅ SMTP配置测试成功</h1>
-    </div>
-    <div class="content">
-        <div class="success">
-            <p><strong>🎉 恭喜！SMTP邮件发送功能正常工作</strong></p>
-        </div>
-        
-        <p>您好，</p>
-        <p>这是一封由域名管理系统自动发送的测试邮件，用于验证SMTP配置是否正常工作。</p>
-        
-        <div class="info">
-            <p><strong>� 测试信息：</strong></p>
-            <ul>
-                <li>收件人：%s</li>
-                <li>发送时间：%s</li>
-                <li>系统状态：正常运行</li>
-            </ul>
-        </div>
-        
-        <p>如果您能看到这封邮件，说明：</p>
-        <ul>
-            <li>✅ SMTP服务器连接正常</li>
-            <li>✅ 认证信息正确</li>
-            <li>✅ 邮件发送功能可用</li>
-            <li>✅ 用户注册邮件验证功能已就绪</li>
-        </ul>
-        
-        <p>现在您的域名管理系统可以正常发送用户注册验证邮件和密码重置邮件了。</p>
-        
-        <p>如有任何问题，请联系系统管理员。</p>
-        
-        <p>祝您使用愉快！<br>域名管理系统团队</p>
-    </div>
-    <div class="footer">
-        <p>此邮件由系统自动发送，请勿回复。</p>
-        <p>域名管理系统 - 让域名管理更简单</p>
-    </div>
-</body>
-</html>`, email, time.Now().Format("2006-01-02 15:04:05"))
+</html>`, email)
 }

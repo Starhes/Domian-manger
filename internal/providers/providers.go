@@ -2,12 +2,15 @@ package providers
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -354,6 +357,12 @@ func (p *DNSPodProvider) getDomainID(domain string) (string, error) {
 
 // makeRequest 发送HTTP请求
 func (p *DNSPodProvider) makeRequest(method, endpoint string, data map[string]string) (*DNSPodResponse, error) {
+	// 使用更健壮的HTTP客户端配置
+	return p.makeRequestWithRetry(method, endpoint, data, 3)
+}
+
+// makeRequestInternal 内部HTTP请求实现
+func (p *DNSPodProvider) makeRequestInternal(method, endpoint string, data map[string]string) (*DNSPodResponse, error) {
 	// 构建请求URL
 	urlStr := p.baseURL + endpoint
 
@@ -367,8 +376,12 @@ func (p *DNSPodProvider) makeRequest(method, endpoint string, data map[string]st
 		reqBody = bytes.NewBufferString(formData.Encode())
 	}
 
+	// 创建带超时的上下文
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	// 创建HTTP请求
-	req, err := http.NewRequest(method, urlStr, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, urlStr, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %v", err)
 	}
@@ -376,14 +389,41 @@ func (p *DNSPodProvider) makeRequest(method, endpoint string, data map[string]st
 	// 设置请求头
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "Domain-Manager/1.0")
+	req.Header.Set("Connection", "keep-alive")
+
+	// 使用共享的HTTP客户端配置
+	client := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+			// 拨号配置
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+		},
+		Timeout: 45 * time.Second, // 总超时时间
+	}
 
 	// 发送请求
-	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		// 检查是否是超时错误
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, fmt.Errorf("请求超时: %v", err)
+		}
 		return nil, fmt.Errorf("请求发送失败: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// 检查HTTP状态码
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("HTTP请求失败，状态码: %d", resp.StatusCode)
+	}
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
@@ -443,11 +483,17 @@ func (p *DNSPodProvider) makeRequestWithRetry(method, endpoint string, data map[
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
-			// 指数退避
-			time.Sleep(time.Duration(attempt*attempt) * time.Second)
+			// 指数退避，带随机抖动
+			baseDelay := time.Duration(attempt*attempt) * time.Second
+			jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+			delay := baseDelay + jitter
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
+			time.Sleep(delay)
 		}
 
-		resp, err := p.makeRequest(method, endpoint, data)
+		resp, err := p.makeRequestInternal(method, endpoint, data)
 		if err == nil {
 			return resp, nil
 		}
@@ -458,6 +504,11 @@ func (p *DNSPodProvider) makeRequestWithRetry(method, endpoint string, data map[
 		if !p.isRetryableError(err) {
 			break
 		}
+
+		// 检查API响应错误码是否可重试
+		if resp != nil && !p.isRetryableStatusCode(resp.Status.Code) {
+			break
+		}
 	}
 
 	return nil, fmt.Errorf("请求失败，已重试%d次: %v", maxRetries, lastErr)
@@ -465,11 +516,30 @@ func (p *DNSPodProvider) makeRequestWithRetry(method, endpoint string, data map[
 
 // isRetryableError 判断错误是否可以重试
 func (p *DNSPodProvider) isRetryableError(err error) bool {
-	errStr := err.Error()
-	// 网络错误或服务器错误可以重试
+	errStr := strings.ToLower(err.Error())
+	// 网络错误、超时错误或服务器错误可以重试
 	return strings.Contains(errStr, "timeout") ||
 		strings.Contains(errStr, "connection") ||
-		strings.Contains(errStr, "server error")
+		strings.Contains(errStr, "server error") ||
+		strings.Contains(errStr, "temporary failure") ||
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset")
+}
+
+// isRetryableStatusCode 判断DNSPod状态码是否可重试
+func (p *DNSPodProvider) isRetryableStatusCode(code string) bool {
+	switch code {
+	case "-2": // API使用超出限制
+		return true
+	case "83": // 操作过于频繁
+		return true
+	case "85": // 包年套餐请求次数不足
+		return true
+	default:
+		return false
+	}
 }
 
 // validateConfig 验证DNSPod配置
@@ -863,8 +933,14 @@ func (p *DNSPodV3Provider) makeRequestWithRetryV3(action string, params map[stri
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		// 记录重试信息
 		if attempt > 0 {
-			backoffDuration := time.Duration(attempt*attempt) * time.Second
-			time.Sleep(backoffDuration) // 指数退避
+			// 指数退避，带随机抖动
+			baseDelay := time.Duration(attempt*attempt) * time.Second
+			jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+			delay := baseDelay + jitter
+			if delay > 30*time.Second {
+				delay = 30 * time.Second
+			}
+			time.Sleep(delay)
 		}
 
 		// 执行单次请求
@@ -882,19 +958,38 @@ func (p *DNSPodV3Provider) makeRequestWithRetryV3(action string, params map[stri
 			isRetryable := false
 			if strings.Contains(err.Error(), "[InternalError]") ||
 				strings.Contains(err.Error(), "[RequestLimitExceeded]") ||
-				strings.Contains(err.Error(), "[ResourceUnavailable]") {
+				strings.Contains(err.Error(), "[ResourceUnavailable]") ||
+				strings.Contains(err.Error(), "[ThrottlingException]") ||
+				strings.Contains(err.Error(), "[ServiceUnavailable]") {
 				isRetryable = true
 			}
 
 			if !isRetryable {
 				break // 不可重试的错误，直接返回
 			}
+		} else if p.isRetryableV3Error(err) {
+			// 网络层面的可重试错误
+			continue
 		} else {
-			break // 非腾讯云API错误，直接返回
+			break // 非腾讯云API错误且不可重试，直接返回
 		}
 	}
 
 	return fmt.Errorf("请求失败，已重试%d次: %v", maxRetries, lastErr)
+}
+
+// isRetryableV3Error 判断腾讯云V3 API错误是否可重试
+func (p *DNSPodV3Provider) isRetryableV3Error(err error) bool {
+	errStr := strings.ToLower(err.Error())
+	// 网络错误、超时错误或服务器错误可以重试
+	return strings.Contains(errStr, "timeout") ||
+		strings.Contains(errStr, "connection") ||
+		strings.Contains(errStr, "temporary failure") ||
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "network is unreachable") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "server error")
 }
 
 // doSingleRequest 执行单次API请求
@@ -910,8 +1005,12 @@ func (p *DNSPodV3Provider) doSingleRequest(action string, params map[string]inte
 		return "", fmt.Errorf("参数序列化失败: %v", err)
 	}
 
+	// 创建带超时的上下文
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	// 创建HTTP请求 - 使用POST方法和JSON格式
-	req, err := http.NewRequest("POST", p.baseURL, bytes.NewBuffer(jsonParams))
+	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL, bytes.NewBuffer(jsonParams))
 	if err != nil {
 		return "", fmt.Errorf("创建请求失败: %v", err)
 	}
@@ -933,6 +1032,7 @@ func (p *DNSPodV3Provider) doSingleRequest(action string, params map[string]inte
 	req.Header.Set("X-TC-Action", action)                              // Action - 操作的接口名称
 	req.Header.Set("X-TC-Version", "2021-03-23")                       // Version - API版本
 	req.Header.Set("X-TC-Timestamp", strconv.FormatInt(timestamp, 10)) // Timestamp - UNIX时间戳
+	req.Header.Set("Connection", "keep-alive")
 
 	// 可选公共参数
 	if p.region != "" {
@@ -950,13 +1050,34 @@ func (p *DNSPodV3Provider) doSingleRequest(action string, params map[string]inte
 
 	req.Header.Set("Authorization", signature)
 
+	// 配置更健壮的HTTP客户端
+	client := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Second,
+		},
+		Timeout: 45 * time.Second, // 总超时时间
+	}
+
 	// 发送请求
-	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		// 检查是否是超时错误
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", fmt.Errorf("请求超时: %v", err)
+		}
 		return "", fmt.Errorf("请求发送失败: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// 检查HTTP状态码
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("HTTP请求失败，状态码: %d", resp.StatusCode)
+	}
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)

@@ -4,7 +4,6 @@ import (
 	"domain-manager/internal/models"
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
