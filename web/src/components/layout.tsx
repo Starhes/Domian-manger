@@ -1,8 +1,9 @@
+import React from 'react'
 import { Layout as AntLayout, Menu, Avatar, Dropdown, Button } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { 
   DashboardOutlined, 
-  DnsOutlined, 
+  DatabaseOutlined, 
   UserOutlined, 
   LogoutOutlined 
 } from '@ant-design/icons'
@@ -23,7 +24,7 @@ export default function Layout() {
     },
     {
       key: '/dns-records',
-      icon: <DnsOutlined />,
+      icon: <DatabaseOutlined />,
       label: 'DNS 记录',
     },
     {
@@ -41,7 +42,8 @@ export default function Layout() {
       onClick: () => navigate('/profile'),
     },
     {
-      type: 'divider',
+      key: 'divider',
+      type: 'divider' as const,
     },
     {
       key: 'logout',
@@ -59,10 +61,10 @@ export default function Layout() {
       <Sider
         breakpoint="lg"
         collapsedWidth="0"
-        onBreakpoint={(broken) => {
+        onBreakpoint={(broken: boolean) => {
           console.log(broken)
         }}
-        onCollapse={(collapsed, type) => {
+        onCollapse={(collapsed: boolean, type: string) => {
           console.log(collapsed, type)
         }}
       >
@@ -85,7 +87,7 @@ export default function Layout() {
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }: { key: string }) => navigate(key)}
         />
       </Sider>
       <AntLayout>

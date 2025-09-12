@@ -1,9 +1,10 @@
+import React from 'react'
 import { Layout as AntLayout, Menu, Avatar, Dropdown, Button } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { 
   DashboardOutlined, 
   UserOutlined, 
-  DnsOutlined,
+  DatabaseOutlined,
   SettingOutlined,
   MailOutlined,
   LogoutOutlined 
@@ -30,7 +31,7 @@ export default function AdminLayout() {
     },
     {
       key: '/admin/domains',
-      icon: <DnsOutlined />,
+      icon: <DatabaseOutlined />,
       label: '域名管理',
     },
     {
@@ -52,7 +53,8 @@ export default function AdminLayout() {
       onClick: () => navigate('/'),
     },
     {
-      type: 'divider',
+      key: 'divider',
+      type: 'divider' as const,
     },
     {
       key: 'logout',
@@ -70,10 +72,10 @@ export default function AdminLayout() {
       <Sider
         breakpoint="lg"
         collapsedWidth="0"
-        onBreakpoint={(broken) => {
+        onBreakpoint={(broken: boolean) => {
           console.log(broken)
         }}
-        onCollapse={(collapsed, type) => {
+        onCollapse={(collapsed: boolean, type: string) => {
           console.log(collapsed, type)
         }}
       >
@@ -96,7 +98,7 @@ export default function AdminLayout() {
           mode="inline"
           selectedKeys={[location.pathname]}
           items={menuItems}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }: { key: string }) => navigate(key)}
         />
       </Sider>
       <AntLayout>

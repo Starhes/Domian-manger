@@ -1,5 +1,5 @@
 import { Typography, Row, Col, Card, Statistic } from 'antd'
-import { UserOutlined, DnsOutlined, GlobalOutlined } from '@ant-design/icons'
+import { UserOutlined, DatabaseOutlined, GlobalOutlined } from '@ant-design/icons'
 
 const { Title } = Typography
 
@@ -22,7 +22,7 @@ export default function Dashboard() {
             <Statistic
               title="DNS 记录"
               value={48}
-              prefix={<DnsOutlined />}
+              prefix={<DatabaseOutlined />}
             />
           </Card>
         </Col>
