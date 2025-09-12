@@ -53,6 +53,7 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	// 需要认证的路由
 	protected := router.Group("/")
 	protected.Use(middleware.AuthRequired(db, cfg))
+	protected.Use(middleware.CSRFProtection()) // 添加CSRF保护
 	{
 		// 用户相关
 		protected.GET("/profile", authHandler.GetProfile)
@@ -68,6 +69,7 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	// 需要认证且支持token撤销的路由
 	protectedWithRevocation := router.Group("/")
 	protectedWithRevocation.Use(middleware.AuthRequiredWithTokenManager(db, cfg, authService))
+	protectedWithRevocation.Use(middleware.CSRFProtection()) // 添加CSRF保护
 	{
 		// 登出需要token撤销功能
 		protectedWithRevocation.POST("/logout", authHandler.Logout)
@@ -77,6 +79,7 @@ func SetupRoutes(router *gin.RouterGroup, db *gorm.DB, cfg *config.Config) {
 	admin := router.Group("/admin")
 	admin.Use(middleware.AdminRequired(db, cfg))
 	admin.Use(middleware.AdminRateLimit())
+	admin.Use(middleware.CSRFProtection()) // 添加CSRF保护
 	{
 		// 用户管理
 		admin.GET("/users", adminHandler.GetUsers)

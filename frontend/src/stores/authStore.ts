@@ -35,13 +35,13 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true })
         try {
           const response = await api.post('/api/login', { email, password })
-          const { token, user } = response.data
+          const { csrf_token, user } = response.data
           
           const { redirectPath } = get()
-          set({ user, token, isLoading: false })
+          set({ user, token: csrf_token, isLoading: false })
           
-          // 设置默认的Authorization header
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+          // CSRF token 用于请求头，实际认证通过Cookie处理
+          api.defaults.headers.common['X-CSRF-Token'] = csrf_token
           
           // 登录成功后重定向到之前想访问的页面
           if (redirectPath) {
@@ -80,7 +80,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         set({ user: null, token: null, redirectPath: null })
-        delete api.defaults.headers.common['Authorization']
+        delete api.defaults.headers.common['X-CSRF-Token']
         // 重定向到登录页面
         window.location.href = '/login'
       },
@@ -92,7 +92,7 @@ export const useAuthStore = create<AuthState>()(
       initAuth: () => {
         const { token } = get()
         if (token) {
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+          api.defaults.headers.common['X-CSRF-Token'] = token
         }
       },
     }),

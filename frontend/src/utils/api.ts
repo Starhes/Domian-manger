@@ -39,6 +39,10 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   (response) => {
+    // 如果响应中有 data 字段，直接返回 data 部分，简化前端调用
+    if (response.data && response.data.success && response.data.data) {
+      return { ...response, data: response.data.data }
+    }
     return response
   },
   (error) => {
