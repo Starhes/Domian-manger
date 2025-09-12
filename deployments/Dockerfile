@@ -7,7 +7,7 @@ WORKDIR /app/web
 
 # 复制前端依赖文件
 COPY web/package*.json ./
-RUN npm ci
+RUN npm install
 
 # 复制前端源码并构建
 COPY web/ ./
