@@ -14,7 +14,7 @@ COPY web/ ./
 RUN npm run build
 
 # 第二阶段：构建后端
-FROM golang:1.23-alpine AS server-builder
+FROM golang:1.21-alpine AS server-builder
 
 # 安装必要的工具
 RUN apk add --no-cache git ca-certificates tzdata

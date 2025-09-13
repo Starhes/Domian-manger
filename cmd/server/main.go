@@ -1,6 +1,7 @@
 package main
 
 import (
+	"domain-max/pkg/api"
 	"domain-max/pkg/config"
 	"domain-max/pkg/database"
 	"domain-max/pkg/middleware"
@@ -95,12 +96,7 @@ func setupWebRoutes(router *gin.Engine) {
 	})
 }
 
-func setupAPIRoutes(router *gin.Engine, db interface{}, cfg interface{}) {
-	// TODO: 实现API路由设置
-	apiGroup := router.Group("/api")
-	
-	// 健康检查
-	apiGroup.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
+func setupAPIRoutes(router *gin.Engine, db *gorm.DB, cfg *config.Config) {
+	// 设置API路由
+	api.SetupRoutes(router, db, cfg)
 }
